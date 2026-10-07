@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
-import TypePicker, { type TypeCard } from "@/components/TypePicker";
-import { longDate, num, pct } from "@/lib/format";
-import { allDates, fillRate, rowsForDate } from "@/lib/metrics";
+import TypePicker from "@/components/TypePicker";
+import { longDate, num } from "@/lib/format";
+import { allDates, rowsForDate } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
 import { useSession } from "@/lib/useAuth";
 import * as todayStore from "@/lib/today";
@@ -40,30 +39,10 @@ export default function EntryPage() {
     [roster, data.entries, date],
   );
 
-  /** One card per contractor type, with that type's progress for the day. */
-  const cards = useMemo<TypeCard[]>(() => {
-    const buckets = new Map<string, TypeCard>();
-    for (const r of allRows) {
-      const card =
-        buckets.get(r.type) ??
-        ({ type: r.type, contractors: 0, committed: 0, reported: 0, entered: 0 } as TypeCard);
-      card.contractors += 1;
-      if (r.actual != null) {
-        // Only contractors who reported count toward the type's fill rate, so
-        // a half-filled form does not read as a collapse.
-        card.committed += r.committed;
-        card.reported = (card.reported ?? 0) + r.actual;
-        card.entered = (card.entered ?? 0) + 1;
-      }
-      buckets.set(r.type, card);
-    }
-    return [...buckets.values()]
-      .map((c) => ({
-        ...c,
-        fillRate: fillRate({ committed: c.committed, actual: c.reported ?? 0 }),
-      }))
-      .sort((a, b) => a.type.localeCompare(b.type));
-  }, [allRows]);
+  const types = useMemo(
+    () => [...new Set(allRows.map((r) => r.type))].sort((a, b) => a.localeCompare(b)),
+    [allRows],
+  );
 
   const rows = useMemo(
     () => (type ? allRows.filter((r) => r.type === type) : allRows),
@@ -135,7 +114,7 @@ export default function EntryPage() {
           actions={dateControl}
         >
           <TypePicker
-            cards={cards}
+            types={types}
             onSelect={setType}
             emptyMessage="No contractors on the roster yet. Add them under Roster first."
           />
@@ -177,35 +156,6 @@ export default function EntryPage() {
         </Card>
       )}
 
-      {!session && showPicker && allRows.length > 0 && (
-        <p className="text-xs text-ink-muted">
-          Day so far: <span className="tnum font-medium text-ink-secondary">{num(entered)}</span> of{" "}
-          {num(allRows.length)} contractors entered
-          {entered > 0 && (
-            <>
-              {" "}
-              ·{" "}
-              <span className="tnum font-medium text-ink-secondary">
-                {pct(
-                  fillRate({
-                    committed: allRows
-                      .filter((r) => r.actual != null)
-                      .reduce((s, r) => s + r.committed, 0),
-                    actual: allRows.reduce((s, r) => s + (r.actual ?? 0), 0),
-                  }),
-                  1,
-                )}
-              </span>{" "}
-              fill rate
-            </>
-          )}
-          .{" "}
-          <Link href="/users" className="underline underline-offset-2 hover:text-ink-secondary">
-            Contractors can enter their own
-          </Link>
-          .
-        </p>
-      )}
     </div>
   );
 }

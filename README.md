@@ -35,12 +35,10 @@ Fill rate is banded so shortfalls surface without reading numbers:
 **below 70 %** critically short. Status is always icon + label + colour, never
 colour alone. Over-supply counts as met, not as a problem.
 
-Daily entry and Roster both open on a **list of contractor types** rather than
-the whole roster at once. Each entry card carries that type's progress for the
-day — heads reported, fill rate, and how many of its contractors are still
-blank — so you can see what is outstanding before opening anything. Clicking a
-type gives the familiar columns: contractor name, committed, today's manpower,
-variance, status.
+Daily entry and Roster both open on a plain **list of contractor types**,
+one per row, rather than the whole roster at once. Clicking a type opens its
+contractors with the columns that matter there: contractor name, committed,
+today's manpower, variance, status.
 
 ## Contractor logins
 

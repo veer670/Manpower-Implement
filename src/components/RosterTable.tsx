@@ -7,7 +7,7 @@ import { pruneUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
-import TypePicker, { type TypeCard } from "./TypePicker";
+import TypePicker from "./TypePicker";
 
 /**
  * The master list, in two levels: contractor types first, then the
@@ -22,20 +22,11 @@ export default function RosterTable() {
     a.localeCompare(b),
   );
 
-  const cards: TypeCard[] = types.map((type) => {
-    const list = data.contractors.filter((c) => c.type === type);
-    return {
-      type,
-      contractors: list.length,
-      committed: list.reduce((s, c) => s + c.committed, 0),
-    };
-  });
-
   if (openType === null) {
     return (
       <div className="space-y-5">
         <TypePicker
-          cards={cards}
+          types={types}
           onSelect={setOpenType}
           emptyMessage="No contractors yet. Add one below, or import a sheet."
         />
