@@ -1,24 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import {
   removeCategory,
   removeContractor,
   removeType,
+  renameCategory,
+  renameContractor,
+  renameType,
   setCategorySrNo,
   setContractorSrNo,
   setTypeSrNo,
   upsertContractor,
 } from "@/lib/dataset";
-import { pruneUsers } from "@/lib/auth";
+import { pruneUsers, remapCategory, remapUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { categoriesOf, contractorsOf, typesOf } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
+import { useAccess } from "@/lib/useAuth";
 import type { Contractor } from "@/lib/types";
 import ListPicker from "./ListPicker";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
+import EditableName from "./EditableName";
 import QuickAdd from "./QuickAdd";
 
 /**
@@ -27,7 +32,16 @@ import QuickAdd from "./QuickAdd";
  * rarely — the daily figure is entered on Daily entry, not here.
  */
 export default function RosterTable() {
-  const { data } = useStore();
+  const { data: all } = useStore();
+  const access = useAccess();
+  // An admin login manages only its own category.
+  const data = useMemo(
+    () =>
+      access.category
+        ? { ...all, contractors: all.contractors.filter((c) => c.category === access.category) }
+        : all,
+    [all, access.category],
+  );
   const [category, setCategory] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -89,6 +103,14 @@ export default function RosterTable() {
             prune(data.contractors.filter((x) => x.category !== c));
           }}
           onSrNo={setCategorySrNo}
+          onRename={(from, to) => {
+            const map = renameCategory(from, to);
+            if (map.size === 0) return false;
+            remapUsers(map);
+            remapCategory(from, to);
+            setCategory(to);
+            return true;
+          }}
           countFor={(c) => data.contractors.filter((x) => x.category === c).length}
           deleteNote={(c) => {
             const n = data.contractors.filter((x) => x.category === c).length;
@@ -118,6 +140,13 @@ export default function RosterTable() {
             prune(data.contractors.filter((x) => !(x.category === liveCategory && x.type === t)));
           }}
           onSrNo={(t, n) => setTypeSrNo(liveCategory, t, n)}
+          onRename={(from, to) => {
+            const map = renameType(liveCategory, from, to);
+            if (map.size === 0) return false;
+            remapUsers(map);
+            setType(to);
+            return true;
+          }}
           countFor={(t) =>
             data.contractors.filter((x) => x.category === liveCategory && x.type === t).length
           }
@@ -170,9 +199,16 @@ export default function RosterTable() {
                   label={c.name}
                   onChange={(n) => setContractorSrNo(c.id, n)}
                 />
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-                  {c.name}
-                </span>
+                <EditableName
+                  value={c.name}
+                  label={c.name}
+                  onRename={(to) => {
+                    const map = renameContractor(c.id, to);
+                    if (map.size === 0) return false;
+                    remapUsers(map);
+                    return true;
+                  }}
+                />
               </div>
 
               <div className="flex w-28 items-center justify-end gap-1.5">

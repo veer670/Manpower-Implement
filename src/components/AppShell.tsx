@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import * as auth from "@/lib/auth";
-import { useSession } from "@/lib/useAuth";
+import { useAccess, useSession } from "@/lib/useAuth";
 import { useStore } from "@/lib/store";
 import { num } from "@/lib/format";
 
@@ -32,7 +32,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { data } = useStore();
   const session = useSession();
 
-  const nav = session ? CONTRACTOR_NAV : ADMIN_NAV;
+  const access = useAccess();
+  // An admin login manages the roster but not the login list.
+  const nav = access.canManageRoster
+    ? ADMIN_NAV.filter((n) => n.href !== "/users" || access.canManageLogins)
+    : CONTRACTOR_NAV;
   const contractor = session
     ? data.contractors.find((c) => c.id === session.contractorId)
     : undefined;
@@ -88,10 +92,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="rounded-lg border border-hairline bg-surface-2 p-3">
               <p className="text-[11px] font-medium text-ink-muted">Signed in</p>
               <p className="mt-1 truncate text-xs font-semibold text-ink">
-                {contractor?.name ?? session.username}
+                {session.role === "admin" ? session.username : (contractor?.name ?? session.username)}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-ink-secondary">
-                {contractor?.type ?? session.username}
+                {session.role === "admin"
+                  ? `Admin · ${session.category ?? "All categories"}`
+                  : `${contractor?.category ?? ""} / ${contractor?.type ?? ""}`}
               </p>
               <button
                 onClick={() => auth.signOut()}

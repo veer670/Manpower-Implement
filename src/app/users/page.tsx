@@ -4,13 +4,13 @@ import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
 import Card from "@/components/Card";
 import UserCreate from "@/components/UserCreate";
-import { useSession } from "@/lib/useAuth";
+import { useAccess } from "@/lib/useAuth";
 
 export default function UsersPage() {
-  const session = useSession();
+  const access = useAccess();
 
-  // A signed-in contractor has no business here.
-  if (session) {
+  // Logins are the site office's to issue, not an admin login's.
+  if (!access.canManageLogins) {
     return (
       <div className="mx-auto max-w-[700px] py-16 text-center">
         <h1 className="text-xl font-semibold tracking-tight text-ink">Not available</h1>

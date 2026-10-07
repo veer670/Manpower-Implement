@@ -2,13 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
-import { removeContractor, saveDay, setContractorSrNo } from "@/lib/dataset";
-import { pruneUsers } from "@/lib/auth";
+import {
+  removeContractor,
+  renameContractor,
+  saveDay,
+  setContractorSrNo,
+} from "@/lib/dataset";
+import { pruneUsers, remapUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
+import EditableName from "./EditableName";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -154,9 +160,22 @@ export default function EntryForm({
                                 {r.srNo || srNo}
                               </span>
                             )}
-                            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-                              {r.name}
-                            </span>
+                            {canEditRoster ? (
+                              <EditableName
+                                value={r.name}
+                                label={r.name}
+                                onRename={(to) => {
+                                  const map = renameContractor(r.id, to);
+                                  if (map.size === 0) return false;
+                                  remapUsers(map);
+                                  return true;
+                                }}
+                              />
+                            ) : (
+                              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                                {r.name}
+                              </span>
+                            )}
                           </div>
 
                           <span

@@ -25,6 +25,7 @@ import {
   withOther,
 } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
+import { useAccess } from "@/lib/useAuth";
 
 export default function DashboardPage() {
   return (
@@ -36,9 +37,12 @@ export default function DashboardPage() {
 
 function Dashboard() {
   const { data, filters } = useStore();
+  const access = useAccess();
 
   const view = useMemo(() => {
-    const roster = visibleContractors(data, filters);
+    const all = visibleContractors(data, filters);
+    // An admin login never sees outside its category, filter or no filter.
+    const roster = access.category ? all.filter((c) => c.category === access.category) : all;
     const entries = visibleEntries(data, filters, roster);
     const dates = allDates(entries);
     const day = latestDate(entries);
@@ -62,7 +66,7 @@ function Dashboard() {
       trendPoints: trend(roster, entries),
       entered: dayRows.filter((r) => r.actual != null).length,
     };
-  }, [data, filters]);
+  }, [data, filters, access.category]);
 
   const {
     roster,

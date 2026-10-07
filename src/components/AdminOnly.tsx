@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useSession } from "@/lib/useAuth";
+import { useAccess } from "@/lib/useAuth";
 
 /**
  * Keeps a signed-in contractor out of the site-office screens. This is a
  * routing guard, not a security boundary — there is no server to enforce one.
  */
 export default function AdminOnly({ children }: { children: ReactNode }) {
-  const session = useSession();
-  if (!session) return <>{children}</>;
+  const access = useAccess();
+  if (access.canManageRoster) return <>{children}</>;
 
   return (
     <div className="mx-auto max-w-[700px] py-16 text-center">

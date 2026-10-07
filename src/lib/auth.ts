@@ -13,10 +13,21 @@ const SESSION_KEY = "manpower.session.v1";
 
 const ITERATIONS = 150_000;
 
+/**
+ * Two kinds of login:
+ *  - "contractor" sees and enters one contractor's own row;
+ *  - "admin" oversees a whole category — every type and contractor under it —
+ *    or all categories when `category` is null.
+ */
+export type UserRole = "contractor" | "admin";
+
 export type User = {
   username: string;
-  /** The contractor this login may enter manpower for. */
-  contractorId: string;
+  role: UserRole;
+  /** role "contractor": the contractor this login may enter manpower for. */
+  contractorId?: string;
+  /** role "admin": the category it oversees, or null for all of them. */
+  category?: string | null;
   salt: string;
   hash: string;
   createdAt: string;
@@ -24,7 +35,9 @@ export type User = {
 
 export type Session = {
   username: string;
-  contractorId: string;
+  role: UserRole;
+  contractorId?: string;
+  category?: string | null;
 };
 
 const toHex = (buf: ArrayBuffer): string =>
@@ -118,7 +131,7 @@ export const usernameTaken = (username: string): boolean =>
   users.some((u) => u.username === normaliseUsername(username));
 
 export const userForContractor = (contractorId: string): User | undefined =>
-  users.find((u) => u.contractorId === contractorId);
+  users.find((u) => u.role === "contractor" && u.contractorId === contractorId);
 
 /** Lowercase, spaces to dots, nothing exotic — these get typed on a phone. */
 export function normaliseUsername(raw: string): string {
@@ -141,7 +154,7 @@ export function generatePassword(length = 10): string {
   return [...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join("");
 }
 
-export async function createUser(
+export async function createContractorUser(
   username: string,
   password: string,
   contractorId: string,
@@ -149,10 +162,42 @@ export async function createUser(
   const name = normaliseUsername(username);
   const salt = newSalt();
   const hash = await derive(password, salt);
-  const next = users.filter((u) => u.username !== name && u.contractorId !== contractorId);
+  // One login per contractor, and usernames are unique across both roles.
+  const next = users.filter(
+    (u) => u.username !== name && !(u.role === "contractor" && u.contractorId === contractorId),
+  );
   persistUsers([
     ...next,
-    { username: name, contractorId, salt, hash, createdAt: new Date().toISOString() },
+    {
+      username: name,
+      role: "contractor",
+      contractorId,
+      salt,
+      hash,
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+}
+
+/** An admin login, scoped to one category or to all of them. */
+export async function createAdminUser(
+  username: string,
+  password: string,
+  category: string | null,
+): Promise<void> {
+  const name = normaliseUsername(username);
+  const salt = newSalt();
+  const hash = await derive(password, salt);
+  persistUsers([
+    ...users.filter((u) => u.username !== name),
+    {
+      username: name,
+      role: "admin",
+      category,
+      salt,
+      hash,
+      createdAt: new Date().toISOString(),
+    },
   ]);
 }
 
@@ -180,7 +225,12 @@ export async function signIn(username: string, password: string): Promise<Sessio
   for (let i = 0; i < hash.length; i++) diff |= hash.charCodeAt(i) ^ user.hash.charCodeAt(i);
   if (diff !== 0) return null;
 
-  const next: Session = { username: user.username, contractorId: user.contractorId };
+  const next: Session = {
+    username: user.username,
+    role: user.role,
+    contractorId: user.contractorId,
+    category: user.category,
+  };
   persistSession(next);
   return next;
 }
@@ -189,8 +239,45 @@ export function signOut(): void {
   persistSession(null);
 }
 
-/** Drop logins whose contractor is no longer on the roster. */
+/** Drop contractor logins whose contractor is no longer on the roster. */
 export function pruneUsers(liveContractorIds: Set<string>): void {
-  const kept = users.filter((u) => liveContractorIds.has(u.contractorId));
+  const kept = users.filter(
+    (u) => u.role !== "contractor" || liveContractorIds.has(u.contractorId ?? ""),
+  );
   if (kept.length !== users.length) persistUsers(kept);
+}
+
+/**
+ * Follow a rename. Contractor ids are derived from names, so a rename on the
+ * roster would otherwise leave a login pointing at an id that no longer exists.
+ */
+export function remapUsers(idMap: Map<string, string>): void {
+  if (idMap.size === 0) return;
+  let touched = false;
+  const next = users.map((u) => {
+    if (u.role !== "contractor" || !u.contractorId) return u;
+    const to = idMap.get(u.contractorId);
+    if (!to) return u;
+    touched = true;
+    return { ...u, contractorId: to };
+  });
+  if (touched) persistUsers(next);
+
+  if (session?.contractorId && idMap.has(session.contractorId)) {
+    persistSession({ ...session, contractorId: idMap.get(session.contractorId)! });
+  }
+}
+
+/** Follow a category rename, for admin logins scoped to it. */
+export function remapCategory(from: string, to: string): void {
+  let touched = false;
+  const next = users.map((u) => {
+    if (u.role !== "admin" || u.category !== from) return u;
+    touched = true;
+    return { ...u, category: to };
+  });
+  if (touched) persistUsers(next);
+  if (session?.role === "admin" && session.category === from) {
+    persistSession({ ...session, category: to });
+  }
 }

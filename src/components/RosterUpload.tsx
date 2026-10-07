@@ -171,7 +171,7 @@ export default function RosterUpload() {
         </p>
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
           {[
-            ["Category", "optional — group, division, section (MEP, Interior…)"],
+            ["Category", "optional — group, division, section, stream"],
             ["Contractor Type", "required — type, discipline, trade, scope"],
             ["Contractor Name", "required — name, contractor, agency, vendor, firm"],
             ["Committed", "required — commitment, agreed, contracted, required"],

@@ -8,14 +8,22 @@ import ListPicker from "@/components/ListPicker";
 import QuickAdd from "@/components/QuickAdd";
 import { longDate } from "@/lib/format";
 import { allDates, categoriesOf, contractorsOf, rowsForDate, typesOf } from "@/lib/metrics";
-import { removeCategory, removeType, setCategorySrNo, setTypeSrNo } from "@/lib/dataset";
+import {
+  removeCategory,
+  removeType,
+  renameCategory,
+  renameType,
+  setCategorySrNo,
+  setTypeSrNo,
+} from "@/lib/dataset";
+import { remapCategory, remapUsers } from "@/lib/auth";
 import { useStore } from "@/lib/store";
-import { useSession } from "@/lib/useAuth";
+import { useAccess } from "@/lib/useAuth";
 import * as todayStore from "@/lib/today";
 
 export default function EntryPage() {
   const { data } = useStore();
-  const session = useSession();
+  const access = useAccess();
   const today = useSyncExternalStore(
     todayStore.subscribe,
     todayStore.getSnapshot,
@@ -32,11 +40,15 @@ export default function EntryPage() {
   // A signed-in contractor sees only their own row. EntryForm saves exactly
   // the rows it was given, so this scoping is also what stops one contractor
   // overwriting another's figures.
-  const roster = useMemo(
-    () =>
-      session ? data.contractors.filter((c) => c.id === session.contractorId) : data.contractors,
-    [data.contractors, session],
-  );
+  const roster = useMemo(() => {
+    if (access.contractorId) {
+      return data.contractors.filter((c) => c.id === access.contractorId);
+    }
+    // An admin login sees only its own category; the office sees everything.
+    return access.category
+      ? data.contractors.filter((c) => c.category === access.category)
+      : data.contractors;
+  }, [data.contractors, access.contractorId, access.category]);
 
   const categories = useMemo(() => categoriesOf(data, roster), [data, roster]);
 
@@ -62,10 +74,12 @@ export default function EntryPage() {
     [scoped, data.entries, date],
   );
 
-  const contractor = session ? data.contractors.find((c) => c.id === session.contractorId) : null;
+  const contractor = access.contractorId
+    ? data.contractors.find((c) => c.id === access.contractorId)
+    : null;
 
   // The login survives a roster re-import that dropped this contractor.
-  if (session && !contractor) {
+  if (access.contractorId && !contractor) {
     return (
       <div className="mx-auto max-w-[700px] py-16 text-center">
         <h1 className="text-xl font-semibold tracking-tight text-ink">Nothing to enter</h1>
@@ -78,7 +92,7 @@ export default function EntryPage() {
   }
 
   /** A contractor has one row — levels above it would be doors onto nothing. */
-  const level: "category" | "type" | "contractors" = session
+  const level: "category" | "type" | "contractors" = access.contractorId
     ? "contractors"
     : liveCategory == null
       ? "category"
@@ -102,7 +116,7 @@ export default function EntryPage() {
   const headerControls = (
     <div className="flex flex-col items-end gap-2">
       {dateControl}
-      {!session && (
+      {access.canManageRoster && (
         <button
           onClick={() => setAdding((a) => !a)}
           aria-expanded={adding}
@@ -120,7 +134,7 @@ export default function EntryPage() {
   );
 
   const quickAdd =
-    !session && adding ? (
+    access.canManageRoster && adding ? (
       <QuickAdd
         key={`${liveCategory ?? "all"}:${liveType ?? "all"}`}
         presetCategory={liveCategory ?? undefined}
@@ -143,10 +157,10 @@ export default function EntryPage() {
     <div className="mx-auto max-w-[1100px] space-y-5">
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">
-          {session ? "My manpower" : "Daily manpower entry"}
+          {contractor ? "My manpower" : "Daily manpower entry"}
         </h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          {session ? (
+          {contractor ? (
             <>
               Entering for <span className="font-medium text-ink">{contractor?.name}</span> —{" "}
               {contractor?.type}. Your committed headcount is {contractor?.committed}.
@@ -169,6 +183,15 @@ export default function EntryPage() {
             onSelect={setCategory}
             onDelete={removeCategory}
             onSrNo={setCategorySrNo}
+            onRename={(from, to) => {
+              const map = renameCategory(from, to);
+              if (map.size === 0) return false;
+              // Ids are derived from the name, so logins have to follow it.
+              remapUsers(map);
+              remapCategory(from, to);
+              setCategory(to);
+              return true;
+            }}
             countFor={(c) => roster.filter((x) => x.category === c).length}
             deleteNote={(c) => {
               const n = roster.filter((x) => x.category === c).length;
@@ -191,6 +214,13 @@ export default function EntryPage() {
             onSelect={setType}
             onDelete={(t) => removeType(liveCategory, t)}
             onSrNo={(t, n) => setTypeSrNo(liveCategory, t, n)}
+            onRename={(from, to) => {
+              const map = renameType(liveCategory, from, to);
+              if (map.size === 0) return false;
+              remapUsers(map);
+              setType(to);
+              return true;
+            }}
             countFor={(t) =>
               roster.filter((x) => x.category === liveCategory && x.type === t).length
             }
@@ -212,7 +242,7 @@ export default function EntryPage() {
           actions={headerControls}
         >
           {quickAdd}
-          {!session && liveCategory && back(liveCategory, () => setType(null))}
+          {access.canManageRoster && liveCategory && back(liveCategory, () => setType(null))}
 
           {date ? (
             // Keyed by date and type so switching either re-seeds the draft
@@ -222,7 +252,7 @@ export default function EntryPage() {
               rows={rows}
               date={date}
               showTypeColumn={false}
-              canEditRoster={!session}
+              canEditRoster={access.canManageRoster}
             />
           ) : (
             <p className="py-8 text-center text-sm text-ink-muted">Loading today&rsquo;s date…</p>

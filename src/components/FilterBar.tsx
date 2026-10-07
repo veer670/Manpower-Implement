@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { useAccess } from "@/lib/useAuth";
 import { allDates, categoriesOf, distinctSites, typesOf } from "@/lib/metrics";
 
 /**
@@ -10,11 +11,16 @@ import { allDates, categoriesOf, distinctSites, typesOf } from "@/lib/metrics";
  */
 export default function FilterBar() {
   const { data, filters, setFilters, clearFilters } = useStore();
+  const access = useAccess();
 
   const dates = allDates(data.entries);
   const min = dates[0];
   const max = dates.at(-1);
-  const categories = categoriesOf(data).map((c) => c.name);
+  // An admin login is confined to its category, so offering the others would
+  // be a dropdown of dead ends — and would name categories it cannot see.
+  const categories = categoriesOf(data)
+    .map((c) => c.name)
+    .filter((c) => !access.category || c === access.category);
   // Types are listed for the chosen category, or across all of them.
   const types = [
     ...new Set(

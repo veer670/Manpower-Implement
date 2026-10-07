@@ -51,6 +51,12 @@ form always asks for a contractor, whatever level you are on.
 it does not renumber the rows around it. Two rows may share a number and ties
 break on name, so setting one row never silently rewrites another.
 
+**Names are editable at every level too** — the pencil beside a category,
+contractor type or contractor. A contractor's id is derived from all three
+names, so renaming any of them mints new ids; saved manpower and contractor
+logins are migrated with the rename. A rename onto a name already in use is
+refused rather than merging two rows into one.
+
 Fill rate is banded so shortfalls surface without reading numbers:
 **≥ 95 %** on commitment · **≥ 85 %** slightly short · **≥ 70 %** short ·
 **below 70 %** critically short. Status is always icon + label + colour, never
@@ -76,9 +82,20 @@ in an empty one.
 
 ## Contractor logins
 
-**User create** issues one login per contractor. The user ID is suggested from
-the contractor name (`Prajapati` → `prajapati`) and the password is generated
-unless you type one.
+**More** issues two kinds of login:
+
+| Kind | Sees |
+|---|---|
+| **Contractor** | Its own row, on Daily entry only |
+| **Admin** | Every type and contractor in one category — or all categories when left unscoped — across Dashboard, Daily entry and Roster |
+
+An admin assigned to MEP sees MEP and nothing else: the category list, the
+dashboard figures and even the filter dropdowns are confined to it, by nav and
+by URL. Issuing logins stays with the site office.
+
+The user ID is suggested from the contractor or category name (`Prajapati` →
+`prajapati`, MEP → `mep.admin`) and the password is generated unless you type
+one.
 
 A contractor signs in at `/login` and gets a single screen — **My manpower** —
 showing only their own row, with no type list in front of it. They cannot see the dashboard, the roster, other
@@ -95,7 +112,7 @@ use **Reset password** to issue a new one.
 > text so the model ports to a real backend unchanged. Treat this as role
 > separation until there is one.
 
-The site office is simply "nobody signed in" — there is no admin password,
+The site office is simply "nobody signed in" — it needs no password of its own,
 because one that cannot be enforced would be theatre.
 
 ## Getting started

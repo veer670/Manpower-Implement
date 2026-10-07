@@ -5,6 +5,7 @@ import { ChevronRight, Trash2, TriangleAlert } from "lucide-react";
 import { num } from "@/lib/format";
 import type { OrderedName } from "@/lib/metrics";
 import SrNoInput from "./SrNoInput";
+import EditableName from "./EditableName";
 
 /**
  * One level of the roster drill-down: categories, or the types inside one.
@@ -15,6 +16,7 @@ export default function ListPicker({
   onSelect,
   onDelete,
   onSrNo,
+  onRename,
   countFor,
   deleteNote,
   emptyMessage,
@@ -25,6 +27,8 @@ export default function ListPicker({
   onDelete?: (name: string) => void;
   /** Omit to make the serial number read-only. */
   onSrNo?: (name: string, srNo: number) => void;
+  /** Omit to make the name read-only. Return false to reject a clash. */
+  onRename?: (from: string, to: string) => boolean;
   /** How many contractors sit under this item, for the confirmation wording. */
   countFor?: (name: string) => number;
   /** What else goes with it, named in the confirmation. */
@@ -114,20 +118,27 @@ export default function ListPicker({
               />
             </div>
 
-            <button
-              onClick={() => onSelect(name)}
-              className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3.5 text-left"
-            >
-              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-                {name}
-              </span>
-              <ChevronRight
-                size={17}
-                strokeWidth={2.2}
-                className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
-                aria-hidden
-              />
-            </button>
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3">
+              {onRename ? (
+                <EditableName
+                  value={name}
+                  label={name}
+                  onRename={(to) => onRename(name, to)}
+                />
+              ) : (
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                  {name}
+                </span>
+              )}
+              <button
+                onClick={() => onSelect(name)}
+                aria-label={`Open ${name}`}
+                title={`Open ${name}`}
+                className="shrink-0 rounded-md p-1.5 text-ink-muted transition-transform hover:bg-surface-2 group-hover:translate-x-0.5 group-hover:text-ink"
+              >
+                <ChevronRight size={17} strokeWidth={2.2} aria-hidden />
+              </button>
+            </div>
 
             {onDelete && (
               <button

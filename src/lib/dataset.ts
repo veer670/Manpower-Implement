@@ -5,7 +5,13 @@ import {
   SAMPLE_CATEGORY_ORDER,
   SAMPLE_TYPE_ORDER,
 } from "./sample";
-import { typeKey, type AppData, type Contractor, type DailyEntry } from "./types";
+import {
+  contractorId,
+  typeKey,
+  type AppData,
+  type Contractor,
+  type DailyEntry,
+} from "./types";
 
 // v3: the roster gained a category level and editable serial numbers, so ids
 // from v2 no longer match.
@@ -157,6 +163,116 @@ export function removeCategory(category: string): void {
     typeOrder,
     isSample: false,
   });
+}
+
+/* ------------------------------------------------------------- renaming */
+
+/**
+ * A contractor's id is derived from its category, type and name, so renaming
+ * any of the three mints new ids. Everything keyed by id — saved manpower and
+ * contractor logins — has to move with them, which is why these return the
+ * old→new map rather than just mutating the roster.
+ */
+export type IdMap = Map<string, string>;
+
+function applyRename(
+  changed: Contractor[],
+  untouched: Contractor[],
+  patch: Partial<AppData>,
+): IdMap {
+  const map: IdMap = new Map();
+  const renamed = changed.map((c) => {
+    const next = contractorId(c.category, c.type, c.name);
+    if (next !== c.id) map.set(c.id, next);
+    return { ...c, id: next };
+  });
+
+  // A rename that collides with an existing contractor would silently merge
+  // two rosters rows into one. Refuse rather than lose a row.
+  const seen = new Set(untouched.map((c) => c.id));
+  for (const c of renamed) {
+    if (seen.has(c.id)) return new Map();
+    seen.add(c.id);
+  }
+
+  commit({
+    ...current,
+    ...patch,
+    contractors: [...untouched, ...renamed],
+    entries: current.entries.map((e) =>
+      map.has(e.contractorId) ? { ...e, contractorId: map.get(e.contractorId)! } : e,
+    ),
+    isSample: false,
+  });
+  return map;
+}
+
+/** Returns the old→new id map, or an empty map when the rename was refused. */
+export function renameCategory(from: string, to: string): IdMap {
+  const name = to.trim();
+  if (!name || name === from) return new Map();
+  if (current.contractors.some((c) => c.category === name)) return new Map();
+
+  const changed = current.contractors
+    .filter((c) => c.category === from)
+    .map((c) => ({ ...c, category: name }));
+  if (changed.length === 0) return new Map();
+
+  const categoryOrder = { ...current.categoryOrder };
+  if (from in categoryOrder) {
+    categoryOrder[name] = categoryOrder[from];
+    delete categoryOrder[from];
+  }
+
+  const oldPrefix = typeKey(from, "");
+  const typeOrder: Record<string, number> = {};
+  for (const [k, v] of Object.entries(current.typeOrder)) {
+    typeOrder[k.startsWith(oldPrefix) ? typeKey(name, k.slice(oldPrefix.length)) : k] = v;
+  }
+
+  return applyRename(
+    changed,
+    current.contractors.filter((c) => c.category !== from),
+    { categoryOrder, typeOrder },
+  );
+}
+
+export function renameType(category: string, from: string, to: string): IdMap {
+  const name = to.trim();
+  if (!name || name === from) return new Map();
+  if (current.contractors.some((c) => c.category === category && c.type === name)) {
+    return new Map();
+  }
+
+  const changed = current.contractors
+    .filter((c) => c.category === category && c.type === from)
+    .map((c) => ({ ...c, type: name }));
+  if (changed.length === 0) return new Map();
+
+  const typeOrder = { ...current.typeOrder };
+  const oldKey = typeKey(category, from);
+  if (oldKey in typeOrder) {
+    typeOrder[typeKey(category, name)] = typeOrder[oldKey];
+    delete typeOrder[oldKey];
+  }
+
+  return applyRename(
+    changed,
+    current.contractors.filter((c) => !(c.category === category && c.type === from)),
+    { typeOrder },
+  );
+}
+
+export function renameContractor(id: string, to: string): IdMap {
+  const name = to.trim();
+  const target = current.contractors.find((c) => c.id === id);
+  if (!name || !target || name === target.name) return new Map();
+
+  return applyRename(
+    [{ ...target, name }],
+    current.contractors.filter((c) => c.id !== id),
+    {},
+  );
 }
 
 /* ------------------------------------------------- display order (Sr. No.) */
