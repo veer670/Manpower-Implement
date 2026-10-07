@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────
+   Design tokens. Light is the base; dark is a *selected* set of
+   steps from the same ramps, declared under both the OS media
+   query and the explicit [data-theme] scope so the in-app toggle
+   wins either way.
+   ────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* surfaces & chrome */
+  --plane:          #f9f9f7;
+  --surface-1:      #fcfcfb;
+  --surface-2:      #f3f3f0;
+  --border:         rgba(11, 11, 11, 0.10);
+  --gridline:       #e1e0d9;
+  --axis:           #c3c2b7;
+
+  /* ink */
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #898781;
+
+  /* categorical series (validated: adjacent CVD ΔE 24.7, normal 33.6) */
+  --series-1:       #2a78d6;  /* Actual   */
+  --series-2:       #eb6834;  /* Planned  */
+
+  /* sequential blue, for single-series magnitude */
+  --seq-400:        #3987e5;
+  --seq-450:        #2a78d6;
+  --seq-100:        #cde2fb;
+
+  /* status — fixed, never themed; always shipped with icon + label */
+  --good:           #0ca30c;
+  --warning:        #fab219;
+  --serious:        #ec835a;
+  --critical:       #d03b3b;
+  --success-text:   #006300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #222221;
+    --border:         rgba(255, 255, 255, 0.10);
+    --gridline:       #2c2c2a;
+    --axis:           #383835;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --seq-400:        #3987e5;
+    --seq-450:        #256abf;
+    --seq-100:        #184f95;
+    --success-text:   #0ca30c;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane:          #0d0d0d;
+  --surface-1:      #1a1a19;
+  --surface-2:      #222221;
+  --border:         rgba(255, 255, 255, 0.10);
+  --gridline:       #2c2c2a;
+  --axis:           #383835;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #898781;
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --seq-400:        #3987e5;
+  --seq-450:        #256abf;
+  --seq-100:        #184f95;
+  --success-text:   #0ca30c;
+}
+
+@theme inline {
+  --color-plane:          var(--plane);
+  --color-surface-1:      var(--surface-1);
+  --color-surface-2:      var(--surface-2);
+  --color-hairline:       var(--border);
+  --color-gridline:       var(--gridline);
+  --color-axis:           var(--axis);
+  --color-ink:            var(--text-primary);
+  --color-ink-secondary:  var(--text-secondary);
+  --color-ink-muted:      var(--text-muted);
+  --color-series-1:       var(--series-1);
+  --color-series-2:       var(--series-2);
+  --color-good:           var(--good);
+  --color-warning:        var(--warning);
+  --color-serious:        var(--serious);
+  --color-critical:       var(--critical);
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--plane);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Columns of numbers align; standalone hero/stat values stay proportional. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Recharts: keep the library's own focus/active outlines out of the way. */
+.recharts-wrapper:focus,
+.recharts-surface:focus { outline: none; }
