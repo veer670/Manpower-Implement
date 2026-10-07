@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   LogIn,
   LogOut,
-  UserCog,
+  MoreHorizontal,
   Users,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
@@ -22,7 +22,7 @@ const ADMIN_NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/entry", label: "Daily entry", Icon: ClipboardList },
   { href: "/roster", label: "Roster", Icon: Users },
-  { href: "/users", label: "User create", Icon: UserCog },
+  { href: "/users", label: "More", Icon: MoreHorizontal },
 ];
 
 const CONTRACTOR_NAV = [{ href: "/entry", label: "My manpower", Icon: ClipboardList }];

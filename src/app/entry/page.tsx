@@ -4,11 +4,11 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
-import TypePicker from "@/components/TypePicker";
+import ListPicker from "@/components/ListPicker";
 import QuickAdd from "@/components/QuickAdd";
 import { longDate } from "@/lib/format";
-import { allDates, rowsForDate } from "@/lib/metrics";
-import { removeType } from "@/lib/dataset";
+import { allDates, categoriesOf, contractorsOf, rowsForDate, typesOf } from "@/lib/metrics";
+import { removeCategory, removeType, setCategorySrNo, setTypeSrNo } from "@/lib/dataset";
 import { useStore } from "@/lib/store";
 import { useSession } from "@/lib/useAuth";
 import * as todayStore from "@/lib/today";
@@ -22,6 +22,7 @@ export default function EntryPage() {
     todayStore.getServerSnapshot,
   );
   const [picked, setPicked] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -37,23 +38,28 @@ export default function EntryPage() {
     [data.contractors, session],
   );
 
-  const allRows = useMemo(
-    () => (date ? rowsForDate(roster, data.entries, date) : []),
-    [roster, data.entries, date],
-  );
+  const categories = useMemo(() => categoriesOf(data, roster), [data, roster]);
+
+  // Deleting the last contractor under a category or type leaves the opened
+  // name pointing at nothing; derive the live value rather than chasing it.
+  const liveCategory = category && categories.some((c) => c.name === category) ? category : null;
 
   const types = useMemo(
-    () => [...new Set(allRows.map((r) => r.type))].sort((a, b) => a.localeCompare(b)),
-    [allRows],
+    () => (liveCategory ? typesOf(data, liveCategory, roster) : []),
+    [data, liveCategory, roster],
   );
 
-  // Deleting the last contractor of a type leaves `type` pointing at one that
-  // no longer exists; derive the live value rather than chasing it in an effect.
-  const activeType = type && types.includes(type) ? type : null;
+  const liveType = liveCategory && type && types.some((t) => t.name === type) ? type : null;
+
+  const scoped = useMemo(() => {
+    if (!liveCategory) return roster;
+    if (!liveType) return roster.filter((c) => c.category === liveCategory);
+    return contractorsOf(roster, liveCategory, liveType);
+  }, [roster, liveCategory, liveType]);
 
   const rows = useMemo(
-    () => (activeType ? allRows.filter((r) => r.type === activeType) : allRows),
-    [allRows, activeType],
+    () => (date ? rowsForDate(scoped, data.entries, date) : []),
+    [scoped, data.entries, date],
   );
 
   const contractor = session ? data.contractors.find((c) => c.id === session.contractorId) : null;
@@ -71,25 +77,31 @@ export default function EntryPage() {
     );
   }
 
-  // A contractor has exactly one row — a type picker in front of it would be
-  // a door with nothing behind it.
-  const showPicker = !session && activeType === null;
+  /** A contractor has one row — levels above it would be doors onto nothing. */
+  const level: "category" | "type" | "contractors" = session
+    ? "contractors"
+    : liveCategory == null
+      ? "category"
+      : liveType == null
+        ? "type"
+        : "contractors";
 
+  const dateControl = (
+    <label className="flex items-center gap-2">
+      <span className="text-xs font-medium text-ink-muted">Date</span>
+      <input
+        type="date"
+        value={date ?? ""}
+        max={today ?? undefined}
+        onChange={(e) => setPicked(e.target.value || null)}
+        className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      />
+    </label>
+  );
 
   const headerControls = (
     <div className="flex flex-col items-end gap-2">
-      <label className="flex items-center gap-2">
-        <span className="text-xs font-medium text-ink-muted">Date</span>
-        <input
-          type="date"
-          value={date ?? ""}
-          max={today ?? undefined}
-          onChange={(e) => setPicked(e.target.value || null)}
-          className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-        />
-      </label>
-
-      {/* A signed-in contractor has one row and no business editing the roster. */}
+      {dateControl}
       {!session && (
         <button
           onClick={() => setAdding((a) => !a)}
@@ -110,11 +122,22 @@ export default function EntryPage() {
   const quickAdd =
     !session && adding ? (
       <QuickAdd
-        key={activeType ?? "all"}
-        presetType={activeType ?? undefined}
+        key={`${liveCategory ?? "all"}:${liveType ?? "all"}`}
+        presetCategory={liveCategory ?? undefined}
+        presetType={liveType ?? undefined}
         onClose={() => setAdding(false)}
       />
     ) : null;
+
+  const back = (label: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      className="mb-4 flex items-center gap-1.5 rounded-md text-xs font-medium text-ink-secondary hover:text-ink"
+    >
+      <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
+      {label}
+    </button>
+  );
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
@@ -128,28 +151,57 @@ export default function EntryPage() {
               Entering for <span className="font-medium text-ink">{contractor?.name}</span> —{" "}
               {contractor?.type}. Your committed headcount is {contractor?.committed}.
             </>
-          ) : showPicker ? (
-            <>Pick a contractor type, then fill in today&rsquo;s manpower against each contractor.</>
+          ) : level === "category" ? (
+            <>Pick a category, then a contractor type, then fill in today&rsquo;s manpower.</>
+          ) : level === "type" ? (
+            <>Pick a contractor type within {liveCategory}.</>
           ) : (
             <>Contractor name and committed headcount come from the roster.</>
           )}
         </p>
       </div>
 
-      {showPicker ? (
-        <Card title="Contractor type" actions={headerControls}>
+      {level === "category" && (
+        <Card title="Manpower Details" actions={headerControls}>
           {quickAdd}
-          <TypePicker
-            types={types}
-            onSelect={setType}
-            onDelete={session ? undefined : removeType}
-            countFor={(t) => allRows.filter((r) => r.type === t).length}
+          <ListPicker
+            items={categories}
+            onSelect={setCategory}
+            onDelete={removeCategory}
+            onSrNo={setCategorySrNo}
+            countFor={(c) => roster.filter((x) => x.category === c).length}
+            deleteNote={(c) => {
+              const n = roster.filter((x) => x.category === c).length;
+              const t = typesOf(data, c, roster).length;
+              return `This removes ${t} contractor type${t === 1 ? "" : "s"} and ${n} contractor${
+                n === 1 ? "" : "s"
+              }, with every manpower figure saved against them. It cannot be undone.`;
+            }}
             emptyMessage="No contractors on the roster yet. Add one with the button above."
           />
         </Card>
-      ) : (
+      )}
+
+      {level === "type" && liveCategory && (
+        <Card title={liveCategory} subtitle="Contractor types" actions={headerControls}>
+          {quickAdd}
+          {back("Manpower Details", () => setCategory(null))}
+          <ListPicker
+            items={types}
+            onSelect={setType}
+            onDelete={(t) => removeType(liveCategory, t)}
+            onSrNo={(t, n) => setTypeSrNo(liveCategory, t, n)}
+            countFor={(t) =>
+              roster.filter((x) => x.category === liveCategory && x.type === t).length
+            }
+            emptyMessage="No contractor types here yet. Add a contractor with the button above."
+          />
+        </Card>
+      )}
+
+      {level === "contractors" && (
         <Card
-          title={activeType ?? (contractor?.type || "")}
+          title={liveType ?? contractor?.type ?? ""}
           subtitle={
             date
               ? `${longDate(date)}${
@@ -160,21 +212,13 @@ export default function EntryPage() {
           actions={headerControls}
         >
           {quickAdd}
-          {!session && (
-            <button
-              onClick={() => setType(null)}
-              className="mb-4 flex items-center gap-1.5 rounded-md text-xs font-medium text-ink-secondary hover:text-ink"
-            >
-              <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
-              All contractor types
-            </button>
-          )}
+          {!session && liveCategory && back(liveCategory, () => setType(null))}
 
           {date ? (
             // Keyed by date and type so switching either re-seeds the draft
             // from storage rather than carrying a stale one across.
             <EntryForm
-              key={`${date}:${activeType ?? "mine"}`}
+              key={`${date}:${liveType ?? "mine"}`}
               rows={rows}
               date={date}
               showTypeColumn={false}
@@ -185,7 +229,6 @@ export default function EntryPage() {
           )}
         </Card>
       )}
-
     </div>
   );
 }

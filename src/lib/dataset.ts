@@ -1,7 +1,17 @@
-import { sampleContractors, sampleEntries, SAMPLE_ANCHOR } from "./sample";
-import type { AppData, Contractor, DailyEntry } from "./types";
+import {
+  sampleContractors,
+  sampleEntries,
+  SAMPLE_ANCHOR,
+  SAMPLE_CATEGORY_ORDER,
+  SAMPLE_TYPE_ORDER,
+} from "./sample";
+import { typeKey, type AppData, type Contractor, type DailyEntry } from "./types";
 
-const STORAGE_KEY = "manpower.data.v2";
+// v3: the roster gained a category level and editable serial numbers, so ids
+// from v2 no longer match.
+const STORAGE_KEY = "manpower.data.v3";
+
+export type { AppData } from "./types";
 
 /**
  * Module constant, not a function call per render: useSyncExternalStore needs
@@ -11,6 +21,8 @@ const STORAGE_KEY = "manpower.data.v2";
 export const SAMPLE_DATA: AppData = {
   contractors: sampleContractors(),
   entries: sampleEntries(),
+  categoryOrder: SAMPLE_CATEGORY_ORDER,
+  typeOrder: SAMPLE_TYPE_ORDER,
   source: "Sample roster",
   loadedAt: `${SAMPLE_ANCHOR}T00:00:00.000Z`,
   isSample: true,
@@ -22,7 +34,11 @@ function read(): AppData | null {
     if (!saved) return null;
     const parsed = JSON.parse(saved) as AppData;
     if (!Array.isArray(parsed.contractors) || !Array.isArray(parsed.entries)) return null;
-    return parsed;
+    return {
+      ...parsed,
+      categoryOrder: parsed.categoryOrder ?? {},
+      typeOrder: parsed.typeOrder ?? {},
+    };
   } catch {
     // A corrupt entry, or a browser refusing storage, is not worth failing the
     // page over — the sample roster is a working fallback.
@@ -64,11 +80,17 @@ export const getServerSnapshot = (): AppData => SAMPLE_DATA;
  * Replace the roster. Daily entries for contractors that are still on the
  * roster are kept — re-importing a corrected sheet must not wipe history.
  */
-export function replaceRoster(contractors: Contractor[], source: string): void {
+export function replaceRoster(
+  contractors: Contractor[],
+  source: string,
+  order?: { categoryOrder?: Record<string, number>; typeOrder?: Record<string, number> },
+): void {
   const live = new Set(contractors.map((c) => c.id));
   commit({
     contractors,
     entries: current.entries.filter((e) => live.has(e.contractorId)),
+    categoryOrder: order?.categoryOrder ?? {},
+    typeOrder: order?.typeOrder ?? {},
     source,
     loadedAt: new Date().toISOString(),
     isSample: false,
@@ -84,28 +106,81 @@ export function upsertContractor(contractor: Contractor): void {
   commit({ ...current, contractors, isSample: false });
 }
 
-/**
- * Remove a whole contractor type: every contractor under it and all of their
- * saved manpower. Callers confirm first — this cannot be undone.
- */
-export function removeType(type: string): void {
-  const doomed = new Set(
-    current.contractors.filter((c) => c.type === type).map((c) => c.id),
-  );
-  if (doomed.size === 0) return;
-  commit({
-    ...current,
-    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
-    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
-    isSample: false,
-  });
-}
-
 export function removeContractor(id: string): void {
   commit({
     ...current,
     contractors: current.contractors.filter((c) => c.id !== id),
     entries: current.entries.filter((e) => e.contractorId !== id),
+    isSample: false,
+  });
+}
+
+/**
+ * Remove a whole contractor type: every contractor under it and all of their
+ * saved manpower. Callers confirm first — this cannot be undone.
+ */
+export function removeType(category: string, type: string): void {
+  const doomed = new Set(
+    current.contractors.filter((c) => c.category === category && c.type === type).map((c) => c.id),
+  );
+  if (doomed.size === 0) return;
+  const typeOrder = { ...current.typeOrder };
+  delete typeOrder[typeKey(category, type)];
+  commit({
+    ...current,
+    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
+    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
+    typeOrder,
+    isSample: false,
+  });
+}
+
+/** Remove a category, and with it every type and contractor underneath. */
+export function removeCategory(category: string): void {
+  const doomed = new Set(
+    current.contractors.filter((c) => c.category === category).map((c) => c.id),
+  );
+  if (doomed.size === 0) return;
+  const categoryOrder = { ...current.categoryOrder };
+  delete categoryOrder[category];
+  // typeKey(category, "") is exactly the prefix every key under this
+  // category starts with.
+  const prefix = typeKey(category, "");
+  const typeOrder = Object.fromEntries(
+    Object.entries(current.typeOrder).filter(([k]) => !k.startsWith(prefix)),
+  );
+  commit({
+    ...current,
+    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
+    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
+    categoryOrder,
+    typeOrder,
+    isSample: false,
+  });
+}
+
+/* ------------------------------------------------- display order (Sr. No.) */
+
+export function setContractorSrNo(id: string, srNo: number): void {
+  commit({
+    ...current,
+    contractors: current.contractors.map((c) => (c.id === id ? { ...c, srNo } : c)),
+    isSample: false,
+  });
+}
+
+export function setCategorySrNo(category: string, srNo: number): void {
+  commit({
+    ...current,
+    categoryOrder: { ...current.categoryOrder, [category]: srNo },
+    isSample: false,
+  });
+}
+
+export function setTypeSrNo(category: string, type: string, srNo: number): void {
+  commit({
+    ...current,
+    typeOrder: { ...current.typeOrder, [typeKey(category, type)]: srNo },
     isSample: false,
   });
 }

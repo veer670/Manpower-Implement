@@ -19,14 +19,14 @@ function Roster() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Contractor roster</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          The master list: contractor type, name and committed headcount. Set this up once
-          — the daily figure is entered under Daily entry.
+          The master list: category, contractor type, name and committed headcount. Set
+          this up once — the daily figure is entered under Daily entry.
         </p>
       </div>
 
       <Card
         title="Roster"
-        subtitle="Pick a contractor type to see its contractors. Committed headcount is editable in place."
+        subtitle="Category, then contractor type, then its contractors. Serial numbers and committed headcount are editable in place."
       >
         <RosterTable />
       </Card>

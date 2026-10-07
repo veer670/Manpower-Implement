@@ -1,23 +1,16 @@
 import * as XLSX from "xlsx";
 import { contractorId, type Contractor, type ParseResult } from "./types";
 
-type Field = "type" | "name" | "committed" | "actual" | "site";
+type Field = "category" | "type" | "name" | "committed" | "actual" | "site" | "srno";
 
 /**
  * Header aliases, in priority order. Registers come in from many hands, so
  * matching is on a normalised key rather than an exact column name.
  */
 const ALIASES: Record<Field, string[]> = {
-  type: [
-    "contractortype",
-    "type",
-    "discipline",
-    "trade",
-    "category",
-    "service",
-    "workcategory",
-    "scope",
-  ],
+  srno: ["srno", "sno", "serialno", "sl", "slno", "sr", "serial"],
+  category: ["category", "group", "division", "section", "head", "stream", "package"],
+  type: ["contractortype", "type", "discipline", "trade", "service", "workcategory", "scope"],
   name: [
     "contractorname",
     "name",
@@ -57,6 +50,9 @@ const ALIASES: Record<Field, string[]> = {
   site: ["site", "sitename", "project", "projectname", "location", "tower", "block"],
 };
 
+/** Where a sheet carries no category column, everything lands in one bucket. */
+const DEFAULT_CATEGORY = "General";
+
 const norm = (s: unknown) =>
   String(s ?? "")
     .toLowerCase()
@@ -69,8 +65,17 @@ function buildMapping(headers: string[]): Record<Field, string | null> {
 
   // "Committed" before "Today's Manpower": both can match loose manpower
   // aliases, and claiming the committed column first stops the daily figure
-  // being read as the commitment.
-  for (const field of ["type", "name", "committed", "actual", "site"] as Field[]) {
+  // being read as the commitment. "Category" before "type" for the same
+  // reason — a sheet headed only "Category" means the outer level.
+  for (const field of [
+    "srno",
+    "category",
+    "type",
+    "name",
+    "committed",
+    "actual",
+    "site",
+  ] as Field[]) {
     let hit: string | null = null;
     for (const alias of ALIASES[field]) {
       const exact = normalised.find((h) => h.key === alias && !taken.has(h.raw));
@@ -119,6 +124,7 @@ export function parseRoster(data: ArrayBuffer): ParseResult {
     contractors: [],
     actuals: new Map(),
     hadActualColumn: false,
+    hadCategoryColumn: false,
     warnings: [],
   };
 
@@ -154,9 +160,15 @@ export function parseRoster(data: ArrayBuffer): ParseResult {
   const contractors: Contractor[] = [];
   const actuals = new Map<string, number>();
   const seen = new Set<string>();
+  // Sr. No. falls back to position within its type, so a sheet without the
+  // column still gets a sensible order rather than every row numbered 0.
+  const nextInType = new Map<string, number>();
 
   table.forEach((raw, i) => {
     const sheetLine = i + 2; // +1 zero-index, +1 header row
+    const category = mapping.category
+      ? String(raw[mapping.category] ?? "").trim() || DEFAULT_CATEGORY
+      : DEFAULT_CATEGORY;
     const type = String(raw[mapping.type!] ?? "").trim();
     const name = String(raw[mapping.name!] ?? "").trim();
 
@@ -184,16 +196,31 @@ export function parseRoster(data: ArrayBuffer): ParseResult {
       return;
     }
 
-    const id = contractorId(type, name);
+    const id = contractorId(category, type, name);
     if (seen.has(id)) {
       if (warnings.length < MAX_WARNINGS)
-        warnings.push(`Row ${sheetLine}: "${name}" under ${type} appears twice — kept the first.`);
+        warnings.push(
+          `Row ${sheetLine}: "${name}" under ${category} / ${type} appears twice — kept the first.`,
+        );
       return;
     }
     seen.add(id);
 
+    const k = `${category}::${type}`;
+    const position = (nextInType.get(k) ?? 0) + 1;
+    nextInType.set(k, position);
+    const stated = mapping.srno ? toCount(raw[mapping.srno]) : null;
+
     const site = mapping.site ? String(raw[mapping.site] ?? "").trim() : "";
-    contractors.push({ id, type, name, committed, ...(site ? { site } : {}) });
+    contractors.push({
+      id,
+      category,
+      type,
+      name,
+      committed,
+      srNo: stated ?? position,
+      ...(site ? { site } : {}),
+    });
 
     if (mapping.actual) {
       const actual = toCount(raw[mapping.actual]);
@@ -205,5 +232,11 @@ export function parseRoster(data: ArrayBuffer): ParseResult {
     warnings.push("No contractor rows found in that sheet.");
   }
 
-  return { contractors, actuals, hadActualColumn: Boolean(mapping.actual), warnings };
+  return {
+    contractors,
+    actuals,
+    hadActualColumn: Boolean(mapping.actual),
+    hadCategoryColumn: Boolean(mapping.category),
+    warnings,
+  };
 }

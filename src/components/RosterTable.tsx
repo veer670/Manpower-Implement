@@ -1,51 +1,134 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Plus } from "lucide-react";
-import { removeContractor, removeType, upsertContractor } from "@/lib/dataset";
+import { ArrowLeft, UserPlus } from "lucide-react";
+import {
+  removeCategory,
+  removeContractor,
+  removeType,
+  setCategorySrNo,
+  setContractorSrNo,
+  setTypeSrNo,
+  upsertContractor,
+} from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
+import { categoriesOf, contractorsOf, typesOf } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
-import { contractorId, type Contractor } from "@/lib/types";
-import TypePicker from "./TypePicker";
+import type { Contractor } from "@/lib/types";
+import ListPicker from "./ListPicker";
 import DeleteButton from "./DeleteButton";
+import SrNoInput from "./SrNoInput";
+import QuickAdd from "./QuickAdd";
 
 /**
- * The master list, in two levels: contractor types first, then the
- * contractors inside one. Everything here is set up once and changes rarely —
- * the daily figure is entered on Daily entry, not here.
+ * The master list, three levels deep: categories, the types inside one, and
+ * the contractors inside that. Everything here is set up once and changes
+ * rarely — the daily figure is entered on Daily entry, not here.
  */
 export default function RosterTable() {
   const { data } = useStore();
-  const [openType, setOpenType] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [type, setType] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  const types = [...new Set(data.contractors.map((c) => c.type))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+  const categories = categoriesOf(data);
+  const liveCategory = category && categories.some((c) => c.name === category) ? category : null;
+  const types = liveCategory ? typesOf(data, liveCategory) : [];
+  const liveType = liveCategory && type && types.some((t) => t.name === type) ? type : null;
 
-  function deleteType(type: string) {
-    removeType(type);
-    // Logins for the contractors that just went would otherwise point at
-    // nothing.
-    pruneUsers(new Set(data.contractors.filter((c) => c.type !== type).map((c) => c.id)));
+  function prune(remaining: Contractor[]) {
+    pruneUsers(new Set(remaining.map((c) => c.id)));
   }
 
-  if (openType === null) {
+  const addButton = (
+    <button
+      onClick={() => setAdding((a) => !a)}
+      aria-expanded={adding}
+      className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+        adding
+          ? "border-accent bg-surface-2 text-ink"
+          : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+      }`}
+    >
+      <UserPlus size={13} strokeWidth={2.4} aria-hidden />
+      Add contractor
+    </button>
+  );
+
+  const quickAdd = adding ? (
+    <QuickAdd
+      key={`${liveCategory ?? "all"}:${liveType ?? "all"}`}
+      presetCategory={liveCategory ?? undefined}
+      presetType={liveType ?? undefined}
+      onClose={() => setAdding(false)}
+    />
+  ) : null;
+
+  const back = (label: string, onClick: () => void) => (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-md text-xs font-medium text-ink-secondary hover:text-ink"
+    >
+      <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
+      {label}
+    </button>
+  );
+
+  /* ------------------------------------------------------- categories */
+  if (liveCategory === null) {
     return (
-      <div className="space-y-5">
-        <TypePicker
-          types={types}
-          onSelect={setOpenType}
-          onDelete={deleteType}
-          countFor={(t) => data.contractors.filter((c) => c.type === t).length}
-          emptyMessage="No contractors yet. Add one below, or import a sheet."
+      <div className="space-y-4">
+        <div className="flex justify-end">{addButton}</div>
+        {quickAdd}
+        <ListPicker
+          items={categories}
+          onSelect={setCategory}
+          onDelete={(c) => {
+            removeCategory(c);
+            prune(data.contractors.filter((x) => x.category !== c));
+          }}
+          onSrNo={setCategorySrNo}
+          countFor={(c) => data.contractors.filter((x) => x.category === c).length}
+          deleteNote={(c) => {
+            const n = data.contractors.filter((x) => x.category === c).length;
+            const t = typesOf(data, c).length;
+            return `This removes ${t} contractor type${t === 1 ? "" : "s"} and ${n} contractor${
+              n === 1 ? "" : "s"
+            }, with every manpower figure saved against them. It cannot be undone.`;
+          }}
+          emptyMessage="No contractors yet. Add one above, or import a sheet."
         />
-        <AddContractor types={types} />
       </div>
     );
   }
 
-  const list = data.contractors.filter((c) => c.type === openType);
+  /* ------------------------------------------------------------ types */
+  if (liveType === null) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">{addButton}</div>
+        {quickAdd}
+        {back("Manpower Details", () => setCategory(null))}
+        <ListPicker
+          items={types}
+          onSelect={setType}
+          onDelete={(t) => {
+            removeType(liveCategory, t);
+            prune(data.contractors.filter((x) => !(x.category === liveCategory && x.type === t)));
+          }}
+          onSrNo={(t, n) => setTypeSrNo(liveCategory, t, n)}
+          countFor={(t) =>
+            data.contractors.filter((x) => x.category === liveCategory && x.type === t).length
+          }
+          emptyMessage="No contractor types here yet. Add a contractor above."
+        />
+      </div>
+    );
+  }
+
+  /* ------------------------------------------------------ contractors */
+  const list = contractorsOf(data.contractors, liveCategory, liveType);
 
   function editCommitted(c: Contractor, value: string) {
     const n = Number(value);
@@ -55,24 +138,17 @@ export default function RosterTable() {
 
   function remove(c: Contractor) {
     removeContractor(c.id);
-    // Its login would otherwise be left pointing at nothing.
-    pruneUsers(new Set(data.contractors.filter((x) => x.id !== c.id).map((x) => x.id)));
-    // Removing the last contractor of a type empties this view.
-    if (list.length === 1) setOpenType(null);
+    prune(data.contractors.filter((x) => x.id !== c.id));
   }
 
   return (
-    <div className="space-y-5">
-      <button
-        onClick={() => setOpenType(null)}
-        className="flex items-center gap-1.5 rounded-md text-xs font-medium text-ink-secondary hover:text-ink"
-      >
-        <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
-        All contractor types
-      </button>
+    <div className="space-y-4">
+      <div className="flex justify-end">{addButton}</div>
+      {quickAdd}
+      {back(liveCategory, () => setType(null))}
 
       {/* The column label is stated once here, not on every card. */}
-      <div className="mb-2 hidden items-center gap-x-5 px-4 lg:flex">
+      <div className="hidden items-center gap-x-5 px-4 lg:flex">
         <span className="flex-1 basis-44" />
         <span className="w-28 text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
           Committed
@@ -86,11 +162,14 @@ export default function RosterTable() {
             key={c.id}
             className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
           >
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
-              <div className="flex min-w-0 flex-1 basis-44 items-center gap-3">
-                <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
-                  {i + 1}
-                </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-3 py-3">
+              <div className="flex min-w-0 flex-1 basis-44 items-center gap-2">
+                <SrNoInput
+                  value={c.srNo}
+                  placeholder={i + 1}
+                  label={c.name}
+                  onChange={(n) => setContractorSrNo(c.id, n)}
+                />
                 <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                   {c.name}
                 </span>
@@ -131,98 +210,6 @@ export default function RosterTable() {
           </span>
         </span>
       </div>
-
-      <AddContractor types={types} fixedType={openType} />
     </div>
   );
 }
-
-function AddContractor({ types, fixedType }: { types: string[]; fixedType?: string }) {
-  const { data } = useStore();
-  const [type, setType] = useState(fixedType ?? "");
-  const [name, setName] = useState("");
-  const [committed, setCommitted] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  function add() {
-    const t = (fixedType ?? type).trim();
-    const n = name.trim();
-    const c = Number(committed);
-    if (!t || !n) {
-      setError("Contractor type and name are both needed.");
-      return;
-    }
-    if (!Number.isFinite(c) || c < 0 || committed.trim() === "") {
-      setError("Committed must be a number.");
-      return;
-    }
-    const id = contractorId(t, n);
-    if (data.contractors.some((x) => x.id === id)) {
-      setError(`${n} is already on the roster under ${t}.`);
-      return;
-    }
-    upsertContractor({ id, type: t, name: n, committed: Math.round(c) });
-    setName("");
-    setCommitted("");
-    setError(null);
-  }
-
-  return (
-    <div className="rounded-xl border border-hairline bg-surface-2 p-4">
-      <h3 className="text-xs font-semibold text-ink">
-        {fixedType ? `Add a contractor to ${fixedType}` : "Add a contractor"}
-      </h3>
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        {!fixedType && (
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-ink-muted">Contractor type</span>
-            <input
-              list="contractor-types"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              placeholder="Electrical"
-              className={field}
-            />
-            <datalist id="contractor-types">
-              {types.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </label>
-        )}
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium text-ink-muted">Contractor name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Prajapati"
-            className={field}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[11px] font-medium text-ink-muted">Committed</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={committed}
-            onChange={(e) => setCommitted(e.target.value.replace(/[^\d]/g, ""))}
-            placeholder="10"
-            className={`${field} tnum w-24 text-right`}
-          />
-        </label>
-        <button
-          onClick={add}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white"
-        >
-          <Plus size={14} strokeWidth={2.6} aria-hidden />
-          Add
-        </button>
-      </div>
-      {error && <p className="mt-2 text-xs text-[var(--critical)]">{error}</p>}
-    </div>
-  );
-}
-
-const field =
-  "rounded-md border border-hairline bg-surface-1 px-2.5 py-1.5 text-xs text-ink " +
-  "placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";

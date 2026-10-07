@@ -30,10 +30,10 @@ export default function UsersPage() {
   return (
     <div className="mx-auto max-w-[1000px] space-y-5">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">User create</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">More</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Give a contractor a user ID and password. They can then sign in and enter their
-          own manpower — and only their own.
+          Contractor logins. Give a contractor a user ID and password and they can sign in
+          to enter their own manpower — and only their own.
         </p>
       </div>
 

@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronRight, Trash2, TriangleAlert } from "lucide-react";
+import { num } from "@/lib/format";
+import type { OrderedName } from "@/lib/metrics";
+import SrNoInput from "./SrNoInput";
+
+/**
+ * One level of the roster drill-down: categories, or the types inside one.
+ * Both levels look and behave the same, so they share this.
+ */
+export default function ListPicker({
+  items,
+  onSelect,
+  onDelete,
+  onSrNo,
+  countFor,
+  deleteNote,
+  emptyMessage,
+}: {
+  items: OrderedName[];
+  onSelect: (name: string) => void;
+  /** Omit to hide the delete control entirely. */
+  onDelete?: (name: string) => void;
+  /** Omit to make the serial number read-only. */
+  onSrNo?: (name: string, srNo: number) => void;
+  /** How many contractors sit under this item, for the confirmation wording. */
+  countFor?: (name: string) => number;
+  /** What else goes with it, named in the confirmation. */
+  deleteNote?: (name: string) => string;
+  emptyMessage: string;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-hairline py-12 text-center">
+        <p className="text-sm text-ink-muted">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {items.map((item, i) => {
+        const name = item.name;
+
+        if (confirming === name) {
+          const count = countFor?.(name) ?? 0;
+          return (
+            <li
+              key={name}
+              className="rounded-xl border border-[var(--critical)]/30 bg-surface-2 p-4"
+            >
+              <div className="flex gap-2.5">
+                <TriangleAlert
+                  size={16}
+                  strokeWidth={2.2}
+                  style={{ color: "var(--critical)" }}
+                  className="mt-0.5 shrink-0"
+                  aria-hidden
+                />
+                <div>
+                  {/* Spelled out, because this takes the saved manpower with it. */}
+                  <p className="text-sm font-semibold text-ink">Delete {name}?</p>
+                  <p className="mt-0.5 text-xs text-ink-secondary">
+                    {deleteNote?.(name) ??
+                      (count > 0
+                        ? `This removes ${num(count)} contractor${
+                            count === 1 ? "" : "s"
+                          } and every manpower figure saved against ${
+                            count === 1 ? "it" : "them"
+                          }. It cannot be undone.`
+                        : "It cannot be undone.")}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2 pl-[26px]">
+                <button
+                  onClick={() => {
+                    onDelete?.(name);
+                    setConfirming(null);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-[var(--critical)] px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  <Trash2 size={13} strokeWidth={2.4} aria-hidden />
+                  Delete {name}
+                </button>
+                <button
+                  onClick={() => setConfirming(null)}
+                  className="rounded-lg border border-hairline bg-surface-1 px-3 py-1.5 text-xs font-semibold text-ink-secondary hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            </li>
+          );
+        }
+
+        return (
+          <li
+            key={name}
+            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
+          >
+            <div className="flex shrink-0 items-center pl-3">
+              <SrNoInput
+                value={item.srNo}
+                // Falls back to position when nothing has been set, so the
+                // list still reads 1, 2, 3 before anyone edits it.
+                placeholder={i + 1}
+                label={name}
+                onChange={onSrNo ? (v) => onSrNo(name, v) : undefined}
+              />
+            </div>
+
+            <button
+              onClick={() => onSelect(name)}
+              className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3.5 text-left"
+            >
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                {name}
+              </span>
+              <ChevronRight
+                size={17}
+                strokeWidth={2.2}
+                className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
+                aria-hidden
+              />
+            </button>
+
+            {onDelete && (
+              <button
+                onClick={() => setConfirming(name)}
+                aria-label={`Delete ${name}`}
+                title={`Delete ${name}`}
+                className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 text-ink-muted transition-colors hover:bg-surface-2 hover:text-[var(--critical)]"
+              >
+                <Trash2 size={14} strokeWidth={2.2} aria-hidden />
+              </button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

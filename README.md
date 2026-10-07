@@ -26,19 +26,39 @@ read-only, with one editable box per contractor.
 | Screen | What it is for |
 |---|---|
 | **Dashboard** | Today's manpower against commitment, fill rate, shortfall, the day-by-day trend, and breakdowns by contractor type and by contractor |
-| **Daily entry** | Pick a contractor type, then fill in that type's figures — variance and status update live |
-| **Roster** | Pick a contractor type, then add, edit and remove its contractors; import the whole list from a sheet |
-| **User create** | Give a contractor a user ID and password so they can enter their own figures |
+| **Daily entry** | Category → contractor type → fill in that type's figures; variance and status update live |
+| **Roster** | The same three levels, for adding, editing and removing; import the whole list from a sheet |
+| **More** | Contractor logins — a user ID and password so each contractor can enter their own figures |
+
+The roster is three levels deep:
+
+```
+Manpower Details
+├── MEP
+│   ├── Electrical      → Prajapati, Amritpal, …
+│   ├── Fire Fighting   → Gara, Apex, …
+│   ├── Mechanical
+│   └── Plumbing
+└── Interior
+    └── HOI
+```
+
+Only the contractor is a record — categories and types exist as fields on it,
+so one with nobody under it would not survive a reload. That is why the add
+form always asks for a contractor, whatever level you are on.
+
+**Sr. No. is editable at every level.** The number you type *is* the sort key;
+it does not renumber the rows around it. Two rows may share a number and ties
+break on name, so setting one row never silently rewrites another.
 
 Fill rate is banded so shortfalls surface without reading numbers:
 **≥ 95 %** on commitment · **≥ 85 %** slightly short · **≥ 70 %** short ·
 **below 70 %** critically short. Status is always icon + label + colour, never
 colour alone. Over-supply counts as met, not as a problem.
 
-Daily entry and Roster both open on a plain **list of contractor types**,
-one per row, rather than the whole roster at once. Clicking a type opens its
-contractors with the columns that matter there: contractor name, committed,
-today's manpower, variance, status.
+Daily entry and Roster both open on **Manpower Details** — the category list —
+and drill down a level at a time. The contractor level carries the columns that
+matter there: contractor name, committed, today's manpower, variance, status.
 
 **Add contractor**, under the date on Daily entry, adds to the roster without
 leaving the screen. Its contractor-type field takes an existing type or a new
@@ -100,7 +120,9 @@ on **Contractor Type**.
 
 | Column | Required | Also accepted as |
 |---|---|---|
-| **Contractor Type** | yes | type, discipline, trade, category, scope |
+| **Category** | no | group, division, section, stream (defaults to General) |
+| **Sr. No.** | no | sno, serial, sl — sets display order within a type |
+| **Contractor Type** | yes | type, discipline, trade, scope |
 | **Contractor Name** | yes | name, contractor, agency, vendor, firm, party |
 | **Committed** | yes | commitment, agreed, contracted, required, target |
 | **Today's Manpower** | no | actual, deployed, present, attendance, strength |

@@ -54,7 +54,12 @@ export default function RosterUpload() {
               `change the date under Daily entry if they belong to another day.`,
           );
         } else {
-          setNote(`${num(result.contractors.length)} contractors loaded.`);
+          setNote(
+            `${num(result.contractors.length)} contractors loaded` +
+              (result.hadCategoryColumn
+                ? "."
+                : " under a single General category — add a Category column to split them."),
+          );
         }
         setWarnings(result.warnings);
       }
@@ -166,10 +171,12 @@ export default function RosterUpload() {
         </p>
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
           {[
-            ["Contractor Type", "required — type, discipline, trade, category"],
+            ["Category", "optional — group, division, section (MEP, Interior…)"],
+            ["Contractor Type", "required — type, discipline, trade, scope"],
             ["Contractor Name", "required — name, contractor, agency, vendor, firm"],
             ["Committed", "required — commitment, agreed, contracted, required"],
             ["Today's Manpower", "optional — actual, deployed, present, attendance"],
+            ["Sr. No.", "optional — sets the display order within a type"],
             ["Site", "optional — only if you run more than one site"],
           ].map(([field, hint]) => (
             <div key={field} className="flex gap-2">

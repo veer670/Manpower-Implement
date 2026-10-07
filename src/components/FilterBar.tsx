@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { allDates, distinctSites, distinctTypes } from "@/lib/metrics";
+import { allDates, categoriesOf, distinctSites, typesOf } from "@/lib/metrics";
 
 /**
  * One filter row above everything it scopes — never per-chart filters. Every
@@ -14,11 +14,23 @@ export default function FilterBar() {
   const dates = allDates(data.entries);
   const min = dates[0];
   const max = dates.at(-1);
-  const types = distinctTypes(data.contractors);
+  const categories = categoriesOf(data).map((c) => c.name);
+  // Types are listed for the chosen category, or across all of them.
+  const types = [
+    ...new Set(
+      (filters.categories.length ? filters.categories : categories).flatMap((c) =>
+        typesOf(data, c).map((t) => t.name),
+      ),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
   const sites = distinctSites(data.contractors);
 
   const active =
-    filters.from || filters.to || filters.types.length > 0 || filters.sites.length > 0;
+    filters.from ||
+    filters.to ||
+    filters.categories.length > 0 ||
+    filters.types.length > 0 ||
+    filters.sites.length > 0;
 
   const preset = (days: number) => {
     if (!max) return;
@@ -59,6 +71,16 @@ export default function FilterBar() {
           </button>
         ))}
       </div>
+
+      <Select
+        label="Category"
+        value={filters.categories[0] ?? ""}
+        allLabel="All categories"
+        options={categories}
+        onChange={(v) =>
+          setFilters((p) => ({ ...p, categories: v ? [v] : [], types: [] }))
+        }
+      />
 
       <Select
         label="Contractor type"

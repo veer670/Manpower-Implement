@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
-import { removeContractor, saveDay } from "@/lib/dataset";
+import { removeContractor, saveDay, setContractorSrNo } from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
 import DeleteButton from "./DeleteButton";
+import SrNoInput from "./SrNoInput";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -140,10 +141,19 @@ export default function EntryForm({
                       <div className="min-w-0 flex-1 px-4 py-3">
                         {/* Identity and figures, aligned to the header strip. */}
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                          <div className="flex min-w-0 flex-1 basis-44 items-center gap-3">
-                            <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
-                              {srNo}
-                            </span>
+                          <div className="flex min-w-0 flex-1 basis-44 items-center gap-2">
+                            {canEditRoster ? (
+                              <SrNoInput
+                                value={r.srNo}
+                                placeholder={srNo}
+                                label={r.name}
+                                onChange={(n) => setContractorSrNo(r.id, n)}
+                              />
+                            ) : (
+                              <span className="tnum w-9 shrink-0 text-center text-xs font-medium text-ink-muted">
+                                {r.srNo || srNo}
+                              </span>
+                            )}
                             <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                               {r.name}
                             </span>

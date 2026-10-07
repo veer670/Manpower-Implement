@@ -15,26 +15,34 @@ import { contractorId } from "@/lib/types";
  * would not survive a reload.
  */
 export default function QuickAdd({
+  presetCategory,
   presetType,
   onClose,
 }: {
-  /** When adding inside an open type, that type is fixed. */
+  /** When adding inside an open category or type, those are fixed. */
+  presetCategory?: string;
   presetType?: string;
   onClose: () => void;
 }) {
   const { data } = useStore();
-  const existingTypes = [...new Set(data.contractors.map((c) => c.type))].sort((a, b) =>
+  const existingCategories = [...new Set(data.contractors.map((c) => c.category))].sort((a, b) =>
     a.localeCompare(b),
   );
 
+  const [category, setCategory] = useState(presetCategory ?? "");
   const [type, setType] = useState(presetType ?? "");
   const [name, setName] = useState("");
   const [committed, setCommitted] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function submit() {
+    const cat = category.trim();
     const t = type.trim();
     const n = name.trim();
+    if (!cat) {
+      setError("Category is needed.");
+      return;
+    }
     if (!t) {
       setError("Contractor type is needed.");
       return;
@@ -52,17 +60,44 @@ export default function QuickAdd({
       setError("Committed must be a number.");
       return;
     }
-    const id = contractorId(canonical ?? t, n);
+    const cat2 = canonicalCategory ?? cat;
+    const type2 = canonical ?? t;
+    const id = contractorId(cat2, type2, n);
     if (data.contractors.some((x) => x.id === id)) {
-      setError(`${n} is already on the roster under ${t}.`);
+      setError(`${n} is already on the roster under ${cat2} / ${type2}.`);
       return;
     }
 
-    upsertContractor({ id, type: canonical ?? t, name: n, committed: Math.round(c) });
+    // Lands at the end of its type; the Sr. No. box reorders it afterwards.
+    const srNo =
+      data.contractors.filter((x) => x.category === cat2 && x.type === type2).length + 1;
+    upsertContractor({
+      id,
+      category: cat2,
+      type: type2,
+      name: n,
+      committed: Math.round(c),
+      srNo,
+    });
     onClose();
   }
 
+  const fixedCategory = Boolean(presetCategory);
   const fixedType = Boolean(presetType);
+
+  // Types already used under the chosen category, for the datalist.
+  const existingTypes = [
+    ...new Set(
+      data.contractors
+        .filter((c) => c.category.toLowerCase() === category.trim().toLowerCase())
+        .map((c) => c.type),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
+  const canonicalCategory = existingCategories.find(
+    (x) => x.toLowerCase() === category.trim().toLowerCase(),
+  );
+  const isNewCategory = category.trim() !== "" && !canonicalCategory;
 
   // Typing a type that already exists, in any casing, should land on it
   // rather than create a near-duplicate beside it.
@@ -76,7 +111,7 @@ export default function QuickAdd({
           <h3 className="text-xs font-semibold text-ink">New contractor</h3>
           <p className="mt-0.5 text-xs text-ink-secondary">
             Added to the roster, and available to enter against straight away. Type a new
-            contractor type to create one.
+            category or contractor type to create one.
           </p>
         </div>
         <button
@@ -89,6 +124,24 @@ export default function QuickAdd({
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
+        {!fixedCategory && (
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-ink-muted">Category</span>
+            <input
+              list="quickadd-categories"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="MEP"
+              className={field}
+            />
+            <datalist id="quickadd-categories">
+              {existingCategories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+        )}
+
         {!fixedType && (
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium text-ink-muted">Contractor type</span>
@@ -141,16 +194,25 @@ export default function QuickAdd({
         </button>
       </div>
 
-      {fixedType ? (
+      {fixedType || fixedCategory ? (
         <p className="mt-2 text-xs text-ink-muted">
-          Adding to <span className="font-medium text-ink-secondary">{presetType}</span>.
-        </p>
-      ) : isNewType ? (
-        <p className="mt-2 text-xs text-ink-muted">
-          <span className="font-medium text-ink-secondary">{type.trim()}</span> is a new
-          contractor type — it will be created with this contractor.
+          Adding to{" "}
+          <span className="font-medium text-ink-secondary">
+            {[presetCategory, presetType].filter(Boolean).join(" / ")}
+          </span>
+          .
         </p>
       ) : null}
+      {(isNewCategory || isNewType) && (
+        <p className="mt-2 text-xs text-ink-muted">
+          <span className="font-medium text-ink-secondary">
+            {[isNewCategory ? category.trim() : null, isNewType ? type.trim() : null]
+              .filter(Boolean)
+              .join(" / ")}
+          </span>{" "}
+          {isNewCategory && isNewType ? "are new" : "is new"} — created with this contractor.
+        </p>
+      )}
       {error && <p className="mt-2 text-xs text-[var(--critical)]">{error}</p>}
     </div>
   );

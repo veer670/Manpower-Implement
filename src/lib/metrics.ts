@@ -1,4 +1,4 @@
-import type { AppData, Contractor, DailyEntry, Filters } from "./types";
+import { typeKey, type AppData, type Contractor, type DailyEntry, type Filters } from "./types";
 
 export type Totals = { committed: number; actual: number };
 
@@ -16,6 +16,9 @@ export type DayRow = Contractor & {
   actual: number | null;
 };
 
+/** A category or type, with the serial number the user gave it. */
+export type OrderedName = { name: string; srNo: number | null };
+
 export const fillRate = (t: Totals): number | null =>
   t.committed > 0 ? t.actual / t.committed : null;
 
@@ -26,17 +29,45 @@ export function allDates(entries: DailyEntry[]): string[] {
 export const latestDate = (entries: DailyEntry[]): string | null =>
   allDates(entries).at(-1) ?? null;
 
-export const distinctTypes = (contractors: Contractor[]): string[] =>
-  [...new Set(contractors.map((c) => c.type))].sort((a, b) => a.localeCompare(b));
+/**
+ * Sort by serial number, then name. An unnumbered item sorts after every
+ * numbered one rather than jumping to the front as a zero would.
+ */
+function byOrder(a: OrderedName, b: OrderedName): number {
+  const x = a.srNo ?? Number.POSITIVE_INFINITY;
+  const y = b.srNo ?? Number.POSITIVE_INFINITY;
+  return x === y ? a.name.localeCompare(b.name) : x - y;
+}
+
+export function categoriesOf(data: AppData, roster?: Contractor[]): OrderedName[] {
+  const list = roster ?? data.contractors;
+  return [...new Set(list.map((c) => c.category))]
+    .map((name) => ({ name, srNo: data.categoryOrder[name] ?? null }))
+    .sort(byOrder);
+}
+
+export function typesOf(data: AppData, category: string, roster?: Contractor[]): OrderedName[] {
+  const list = roster ?? data.contractors;
+  return [...new Set(list.filter((c) => c.category === category).map((c) => c.type))]
+    .map((name) => ({ name, srNo: data.typeOrder[typeKey(category, name)] ?? null }))
+    .sort(byOrder);
+}
+
+/** Contractors within one type, in the user's order. */
+export const contractorsOf = (roster: Contractor[], category: string, type: string): Contractor[] =>
+  roster
+    .filter((c) => c.category === category && c.type === type)
+    .sort((a, b) => (a.srNo === b.srNo ? a.name.localeCompare(b.name) : a.srNo - b.srNo));
 
 export const distinctSites = (contractors: Contractor[]): string[] =>
   [...new Set(contractors.map((c) => c.site).filter((s): s is string => Boolean(s)))].sort((a, b) =>
     a.localeCompare(b),
   );
 
-/** Roster rows left after the type/site filters. */
+/** Roster rows left after the category/type/site filters. */
 export function visibleContractors(data: AppData, f: Filters): Contractor[] {
   return data.contractors.filter((c) => {
+    if (f.categories.length && !f.categories.includes(c.category)) return false;
     if (f.types.length && !f.types.includes(c.type)) return false;
     if (f.sites.length && !(c.site && f.sites.includes(c.site))) return false;
     return true;
@@ -56,7 +87,9 @@ export function visibleEntries(data: AppData, f: Filters, roster: Contractor[]):
 
 /** The roster joined to a single day — what the entry form and today's KPIs read. */
 export function rowsForDate(roster: Contractor[], entries: DailyEntry[], date: string): DayRow[] {
-  const byId = new Map(entries.filter((e) => e.date === date).map((e) => [e.contractorId, e.actual]));
+  const byId = new Map(
+    entries.filter((e) => e.date === date).map((e) => [e.contractorId, e.actual]),
+  );
   return roster.map((c) => ({ ...c, actual: byId.get(c.id) ?? null }));
 }
 
@@ -90,11 +123,14 @@ function group(rows: DayRow[], pick: (r: DayRow) => string): GroupRow[] {
   }));
 }
 
-/** Contractor types, worst fill rate first — shortfalls are the point. */
-export const byType = (rows: DayRow[]): GroupRow[] =>
-  group(rows, (r) => r.type).sort((a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity));
+/** Worst fill rate first — the shortfalls are what this is opened for. */
+const worstFirst = (g: GroupRow[]) =>
+  g.sort((a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity));
 
-/** Contractors, worst fill rate first. */
+export const byCategory = (rows: DayRow[]): GroupRow[] => worstFirst(group(rows, (r) => r.category));
+
+export const byType = (rows: DayRow[]): GroupRow[] => worstFirst(group(rows, (r) => r.type));
+
 export function byContractor(rows: DayRow[]): GroupRow[] {
   return rows
     .filter((r) => r.actual != null)
