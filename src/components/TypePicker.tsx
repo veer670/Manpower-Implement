@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Trash2 } from "lucide-react";
+import { ChevronRight, Trash2, TriangleAlert } from "lucide-react";
 import { num } from "@/lib/format";
+import { initialsOf } from "./Table";
 
 /**
- * The first level of both Daily entry and Roster: contractor types, one per
- * row. Deliberately just the names — the figures belong inside a type, not
- * on the way to it.
+ * The first level of both Daily entry and Roster: contractor types, one card
+ * per row. Deliberately just the names — the figures belong inside a type,
+ * not on the way to it.
  */
 export default function TypePicker({
   types,
@@ -27,28 +28,44 @@ export default function TypePicker({
   const [confirming, setConfirming] = useState<string | null>(null);
 
   if (types.length === 0) {
-    return <p className="py-10 text-center text-sm text-ink-muted">{emptyMessage}</p>;
+    return (
+      <div className="rounded-xl border border-dashed border-hairline py-12 text-center">
+        <p className="text-sm text-ink-muted">{emptyMessage}</p>
+      </div>
+    );
   }
 
   return (
-    <ul className="divide-y divide-hairline/60 border-y border-hairline/60">
+    <ul className="space-y-2">
       {types.map((type, i) => {
         const srNo = i + 1;
 
         if (confirming === type) {
           const count = countFor?.(type) ?? 0;
           return (
-            <li key={type} className="bg-surface-2 px-3 py-3">
-              {/* Spelled out, because this takes the saved manpower with it. */}
-              <p className="text-sm text-ink">
-                Delete <span className="font-semibold">{type}</span>?
-              </p>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                {count > 0
-                  ? `This removes ${num(count)} contractor${count === 1 ? "" : "s"} and every manpower figure saved against ${count === 1 ? "them" : "them"}. It cannot be undone.`
-                  : "It cannot be undone."}
-              </p>
-              <div className="mt-3 flex items-center gap-2">
+            <li
+              key={type}
+              className="rounded-xl border border-[var(--critical)]/30 bg-surface-2 p-4"
+            >
+              <div className="flex gap-2.5">
+                <TriangleAlert
+                  size={16}
+                  strokeWidth={2.2}
+                  style={{ color: "var(--critical)" }}
+                  className="mt-0.5 shrink-0"
+                  aria-hidden
+                />
+                <div>
+                  {/* Spelled out, because this takes the saved manpower with it. */}
+                  <p className="text-sm font-semibold text-ink">Delete {type}?</p>
+                  <p className="mt-0.5 text-xs text-ink-secondary">
+                    {count > 0
+                      ? `This removes ${num(count)} contractor${count === 1 ? "" : "s"} and every manpower figure saved against ${count === 1 ? "it" : "them"}. It cannot be undone.`
+                      : "It cannot be undone."}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2 pl-[26px]">
                 <button
                   onClick={() => {
                     onDelete?.(type);
@@ -71,17 +88,31 @@ export default function TypePicker({
         }
 
         return (
-          <li key={type} className="group flex items-center transition-colors hover:bg-surface-2">
+          <li
+            key={type}
+            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-all hover:border-series-1/35 hover:bg-surface-2"
+          >
             <button
               onClick={() => onSelect(type)}
-              className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3.5 text-left"
+              className="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3.5 text-left"
             >
-              <span className="tnum w-6 shrink-0 text-xs text-ink-muted">{srNo}</span>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{type}</span>
+              <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">{srNo}</span>
+
+              <span
+                aria-hidden
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-bold tracking-wide text-ink-secondary transition-colors group-hover:bg-surface-1 group-hover:text-ink"
+              >
+                {initialsOf(type)}
+              </span>
+
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                {type}
+              </span>
+
               <ChevronRight
-                size={16}
+                size={17}
                 strokeWidth={2.2}
-                className="shrink-0 text-ink-muted transition-colors group-hover:text-ink"
+                className="shrink-0 text-ink-muted transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
                 aria-hidden
               />
             </button>
@@ -91,7 +122,7 @@ export default function TypePicker({
                 onClick={() => setConfirming(type)}
                 aria-label={`Delete the ${type} contractor type`}
                 title={`Delete ${type}`}
-                className="mr-2 rounded-md p-2 text-ink-muted hover:bg-surface-1 hover:text-[var(--critical)]"
+                className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 text-ink-muted transition-colors hover:bg-surface-1 hover:text-[var(--critical)]"
               >
                 <Trash2 size={14} strokeWidth={2.2} aria-hidden />
               </button>

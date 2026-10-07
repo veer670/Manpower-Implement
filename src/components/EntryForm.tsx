@@ -7,6 +7,7 @@ import { pruneUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
+import { FootRow, HeadRow, Row, Td, Th } from "./Table";
 import DeleteButton from "./DeleteButton";
 
 /**
@@ -112,7 +113,7 @@ export default function EntryForm({
       <div className="overflow-x-auto">
         <table className={`w-full text-sm ${showTypeColumn ? "min-w-[760px]" : "min-w-[640px]"}`}>
           <thead>
-            <tr className="border-b border-hairline text-left">
+            <HeadRow>
               <Th>Sr. No.</Th>
               {showTypeColumn && <Th>Contractor type</Th>}
               <Th>Contractor name</Th>
@@ -125,7 +126,7 @@ export default function EntryForm({
                   <span className="sr-only">Actions</span>
                 </Th>
               )}
-            </tr>
+            </HeadRow>
           </thead>
           <tbody>
             {blocks.map(([type, block]) =>
@@ -135,19 +136,19 @@ export default function EntryForm({
                 const rate =
                   value == null ? null : fillRate({ committed: r.committed, actual: value });
                 return (
-                  <tr key={r.id} className="border-b border-hairline/60">
-                    <td className="tnum py-1.5 pr-4 text-ink-muted">{srNo}</td>
+                  <Row key={r.id}>
+                    <Td align="left" className="text-ink-muted">{srNo}</Td>
                     {showTypeColumn && (
-                      <td className="py-1.5 pr-4">
+                      <Td align="left" numeric={false}>
                         {/* Named once per block, as it is on the register. */}
-                        {i === 0 ? <span className="font-medium text-ink">{type}</span> : null}
-                      </td>
+                        {i === 0 ? <span className="font-semibold text-ink">{type}</span> : null}
+                      </Td>
                     )}
-                    <td className="py-1.5 pr-4 font-medium text-ink">{r.name}</td>
-                    <td className="tnum py-1.5 pr-4 text-right text-ink-secondary">
-                      {num(r.committed)}
-                    </td>
-                    <td className="py-1.5 pr-4 text-right">
+                    <Td align="left" numeric={false} className="font-semibold text-ink">
+                      {r.name}
+                    </Td>
+                    <Td>{num(r.committed)}</Td>
+                    <td className="py-2 pr-4 text-right">
                       <input
                         type="text"
                         inputMode="numeric"
@@ -155,19 +156,19 @@ export default function EntryForm({
                         value={draft[r.id] ?? ""}
                         onChange={(e) => update(r.id, e.target.value)}
                         placeholder="—"
-                        className="tnum w-20 rounded-md border border-hairline bg-surface-2 px-2 py-1.5 text-right text-ink placeholder:text-ink-muted focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
+                        className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
                       />
                     </td>
-                    <td
-                      className={`tnum py-1.5 pr-4 text-right ${
+                    <Td
+                      className={
                         value != null && value - r.committed < 0
-                          ? "text-[var(--critical)]"
-                          : "text-ink-secondary"
-                      }`}
+                          ? "font-medium text-[var(--critical)]"
+                          : "font-medium"
+                      }
                     >
                       {value == null ? "—" : signed(value - r.committed)}
-                    </td>
-                    <td className="py-1.5">
+                    </Td>
+                    <td className="py-2.5">
                       {value == null ? (
                         <span className="text-xs text-ink-muted">Not entered</span>
                       ) : (
@@ -175,7 +176,7 @@ export default function EntryForm({
                       )}
                     </td>
                     {canEditRoster && (
-                      <td className="py-1.5 pl-4 text-right">
+                      <td className="py-2.5 pl-4 text-right">
                         <DeleteButton
                           label={`${r.name} from the roster`}
                           onConfirm={() => {
@@ -188,26 +189,24 @@ export default function EntryForm({
                         />
                       </td>
                     )}
-                  </tr>
+                  </Row>
                 );
               }),
             )}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-hairline font-semibold">
-              <td className="py-2.5 pr-4 text-ink" colSpan={showTypeColumn ? 3 : 2}>
+            <FootRow>
+              <td className="py-3 pr-4" colSpan={showTypeColumn ? 3 : 2}>
                 Total — {num(totals.filled)} of {num(rows.length)} entered
               </td>
-              <td className="tnum py-2.5 pr-4 text-right text-ink">{num(totals.committed)}</td>
-              <td className="tnum py-2.5 pr-4 text-right text-ink">{num(totals.actual)}</td>
-              <td className="tnum py-2.5 pr-4 text-right text-ink">
-                {signed(totals.actual - totals.committed)}
-              </td>
-              <td className="py-2.5 text-xs font-medium text-ink-secondary">
+              <Td className="text-ink">{num(totals.committed)}</Td>
+              <Td className="text-ink">{num(totals.actual)}</Td>
+              <Td className="text-ink">{signed(totals.actual - totals.committed)}</Td>
+              <td className="tnum py-3 text-xs text-ink-secondary">
                 {pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
               </td>
               {canEditRoster && <td />}
-            </tr>
+            </FootRow>
           </tfoot>
         </table>
       </div>
@@ -245,21 +244,3 @@ export default function EntryForm({
   );
 }
 
-function Th({
-  children,
-  align = "left",
-}: {
-  children: React.ReactNode;
-  align?: "left" | "right";
-}) {
-  return (
-    <th
-      scope="col"
-      className={`pb-2 pr-4 text-xs font-medium text-ink-secondary ${
-        align === "right" ? "text-right" : "text-left"
-      }`}
-    >
-      {children}
-    </th>
-  );
-}

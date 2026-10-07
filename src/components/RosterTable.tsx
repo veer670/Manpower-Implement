@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
 import TypePicker from "./TypePicker";
 import DeleteButton from "./DeleteButton";
+import { FootRow, HeadRow, Row, Td, Th } from "./Table";
 
 /**
  * The master list, in two levels: contractor types first, then the
@@ -74,58 +75,48 @@ export default function RosterTable() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead>
-            <tr className="border-b border-hairline text-left">
-              <th scope="col" className="pb-2 pr-4 text-xs font-medium text-ink-secondary">
-                Sr. No.
-              </th>
-              <th scope="col" className="pb-2 pr-4 text-xs font-medium text-ink-secondary">
-                Contractor name
-              </th>
-              <th
-                scope="col"
-                className="pb-2 pr-4 text-right text-xs font-medium text-ink-secondary"
-              >
-                Committed
-              </th>
-              <th scope="col" className="pb-2">
+            <HeadRow>
+              <Th>Sr. No.</Th>
+              <Th>Contractor name</Th>
+              <Th align="right">Committed</Th>
+              <Th align="right">
                 <span className="sr-only">Actions</span>
-              </th>
-            </tr>
+              </Th>
+            </HeadRow>
           </thead>
           <tbody>
             {list.map((c, i) => (
-              <tr key={c.id} className="border-b border-hairline/60">
-                <td className="tnum py-1.5 pr-4 text-ink-muted">{i + 1}</td>
-                <td className="py-1.5 pr-4 font-medium text-ink">{c.name}</td>
-                <td className="py-1.5 pr-4 text-right">
+              <Row key={c.id}>
+                <Td align="left" className="text-ink-muted">
+                  {i + 1}
+                </Td>
+                <Td align="left" numeric={false} className="font-semibold text-ink">
+                  {c.name}
+                </Td>
+                <td className="py-2 pr-4 text-right">
                   <input
                     type="text"
                     inputMode="numeric"
                     aria-label={`Committed headcount for ${c.name}`}
                     defaultValue={c.committed}
                     onBlur={(e) => editCommitted(c, e.target.value.trim())}
-                    className="tnum w-20 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-right text-ink focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
+                    className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
                   />
                 </td>
-                <td className="py-1.5 pl-4 text-right">
-                  <DeleteButton
-                    label={`${c.name} from the roster`}
-                    onConfirm={() => remove(c)}
-                  />
+                <td className="py-2.5 pl-4 text-right">
+                  <DeleteButton label={`${c.name} from the roster`} onConfirm={() => remove(c)} />
                 </td>
-              </tr>
+              </Row>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-hairline font-semibold">
-              <td className="py-2.5 pr-4 text-ink" colSpan={2}>
+            <FootRow>
+              <td className="py-3 pr-4" colSpan={2}>
                 {num(list.length)} contractor{list.length === 1 ? "" : "s"}
               </td>
-              <td className="tnum py-2.5 pr-4 text-right text-ink">
-                {num(list.reduce((s, c) => s + c.committed, 0))}
-              </td>
+              <Td className="text-ink">{num(list.reduce((s, c) => s + c.committed, 0))}</Td>
               <td />
-            </tr>
+            </FootRow>
           </tfoot>
         </table>
       </div>
