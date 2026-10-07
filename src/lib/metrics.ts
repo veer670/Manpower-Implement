@@ -1,6 +1,6 @@
-import type { Filters, ManpowerRow } from "./types";
+import type { AppData, Contractor, DailyEntry, Filters } from "./types";
 
-export type Totals = { planned: number; actual: number };
+export type Totals = { committed: number; actual: number };
 
 export type GroupRow = Totals & {
   key: string;
@@ -10,100 +10,136 @@ export type GroupRow = Totals & {
 
 export type TrendPoint = Totals & { date: string };
 
-export function applyFilters(rows: ManpowerRow[], f: Filters): ManpowerRow[] {
-  return rows.filter((r) => {
-    if (f.from && r.date < f.from) return false;
-    if (f.to && r.date > f.to) return false;
-    if (f.sites.length && !f.sites.includes(r.site)) return false;
-    if (f.contractors.length && !f.contractors.includes(r.contractor)) return false;
-    if (f.trades.length && !f.trades.includes(r.trade)) return false;
+/** A roster row joined to one day's reported manpower. */
+export type DayRow = Contractor & {
+  /** null when nothing was entered for that contractor on that day. */
+  actual: number | null;
+};
+
+export const fillRate = (t: Totals): number | null =>
+  t.committed > 0 ? t.actual / t.committed : null;
+
+export function allDates(entries: DailyEntry[]): string[] {
+  return [...new Set(entries.map((e) => e.date))].sort();
+}
+
+export const latestDate = (entries: DailyEntry[]): string | null =>
+  allDates(entries).at(-1) ?? null;
+
+export const distinctTypes = (contractors: Contractor[]): string[] =>
+  [...new Set(contractors.map((c) => c.type))].sort((a, b) => a.localeCompare(b));
+
+export const distinctSites = (contractors: Contractor[]): string[] =>
+  [...new Set(contractors.map((c) => c.site).filter((s): s is string => Boolean(s)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+/** Roster rows left after the type/site filters. */
+export function visibleContractors(data: AppData, f: Filters): Contractor[] {
+  return data.contractors.filter((c) => {
+    if (f.types.length && !f.types.includes(c.type)) return false;
+    if (f.sites.length && !(c.site && f.sites.includes(c.site))) return false;
     return true;
   });
 }
 
-export const sum = (rows: ManpowerRow[]): Totals =>
-  rows.reduce<Totals>(
-    (acc, r) => ({ planned: acc.planned + r.planned, actual: acc.actual + r.actual }),
-    { planned: 0, actual: 0 },
+/** Entries left after the date filter, restricted to the visible roster. */
+export function visibleEntries(data: AppData, f: Filters, roster: Contractor[]): DailyEntry[] {
+  const live = new Set(roster.map((c) => c.id));
+  return data.entries.filter((e) => {
+    if (!live.has(e.contractorId)) return false;
+    if (f.from && e.date < f.from) return false;
+    if (f.to && e.date > f.to) return false;
+    return true;
+  });
+}
+
+/** The roster joined to a single day — what the entry form and today's KPIs read. */
+export function rowsForDate(roster: Contractor[], entries: DailyEntry[], date: string): DayRow[] {
+  const byId = new Map(entries.filter((e) => e.date === date).map((e) => [e.contractorId, e.actual]));
+  return roster.map((c) => ({ ...c, actual: byId.get(c.id) ?? null }));
+}
+
+export function totalsForRows(rows: DayRow[]): Totals {
+  return rows.reduce<Totals>(
+    (acc, r) => ({
+      // A contractor with nothing entered contributes no commitment either,
+      // so the fill rate compares like with like.
+      committed: acc.committed + (r.actual == null ? 0 : r.committed),
+      actual: acc.actual + (r.actual ?? 0),
+    }),
+    { committed: 0, actual: 0 },
   );
+}
 
-export const fillRate = (t: Totals): number | null =>
-  t.planned > 0 ? t.actual / t.planned : null;
-
-function groupBy(rows: ManpowerRow[], pick: (r: ManpowerRow) => string): GroupRow[] {
+function group(rows: DayRow[], pick: (r: DayRow) => string): GroupRow[] {
   const buckets = new Map<string, Totals>();
   for (const r of rows) {
+    if (r.actual == null) continue;
     const k = pick(r);
-    const cur = buckets.get(k) ?? { planned: 0, actual: 0 };
-    cur.planned += r.planned;
+    const cur = buckets.get(k) ?? { committed: 0, actual: 0 };
+    cur.committed += r.committed;
     cur.actual += r.actual;
     buckets.set(k, cur);
   }
   return [...buckets.entries()].map(([key, t]) => ({
     key,
     ...t,
-    variance: t.actual - t.planned,
+    variance: t.actual - t.committed,
     fillRate: fillRate(t),
   }));
 }
 
-/** Sites, worst fill-rate first — the shortfalls are what a PM opens this for. */
-export const bySite = (rows: ManpowerRow[]): GroupRow[] =>
-  groupBy(rows, (r) => r.site).sort(
-    (a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity),
-  );
+/** Contractor types, worst fill rate first — shortfalls are the point. */
+export const byType = (rows: DayRow[]): GroupRow[] =>
+  group(rows, (r) => r.type).sort((a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity));
 
-export const byContractor = (rows: ManpowerRow[]): GroupRow[] =>
-  groupBy(rows, (r) => r.contractor).sort((a, b) => b.actual - a.actual);
+/** Contractors, worst fill rate first. */
+export function byContractor(rows: DayRow[]): GroupRow[] {
+  return rows
+    .filter((r) => r.actual != null)
+    .map((r) => {
+      const t = { committed: r.committed, actual: r.actual as number };
+      return { key: r.name, ...t, variance: t.actual - t.committed, fillRate: fillRate(t) };
+    })
+    .sort((a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity));
+}
 
-export const byTrade = (rows: ManpowerRow[]): GroupRow[] =>
-  groupBy(rows, (r) => r.trade).sort((a, b) => b.actual - a.actual);
-
-export const trend = (rows: ManpowerRow[]): TrendPoint[] => {
+/** Committed versus reported, day by day, across the whole filtered window. */
+export function trend(roster: Contractor[], entries: DailyEntry[]): TrendPoint[] {
+  const committedById = new Map(roster.map((c) => [c.id, c.committed]));
   const buckets = new Map<string, Totals>();
-  for (const r of rows) {
-    const cur = buckets.get(r.date) ?? { planned: 0, actual: 0 };
-    cur.planned += r.planned;
-    cur.actual += r.actual;
-    buckets.set(r.date, cur);
+  for (const e of entries) {
+    const committed = committedById.get(e.contractorId);
+    if (committed == null) continue;
+    const cur = buckets.get(e.date) ?? { committed: 0, actual: 0 };
+    cur.committed += committed;
+    cur.actual += e.actual;
+    buckets.set(e.date, cur);
   }
   return [...buckets.entries()]
     .map(([date, t]) => ({ date, ...t }))
     .sort((a, b) => a.date.localeCompare(b.date));
-};
-
-export const distinct = (rows: ManpowerRow[], pick: (r: ManpowerRow) => string): string[] =>
-  [...new Set(rows.map(pick))].sort((a, b) => a.localeCompare(b));
-
-export const dateRange = (rows: ManpowerRow[]): { min: string; max: string } | null => {
-  if (rows.length === 0) return null;
-  let min = rows[0].date;
-  let max = rows[0].date;
-  for (const r of rows) {
-    if (r.date < min) min = r.date;
-    if (r.date > max) max = r.date;
-  }
-  return { min, max };
-};
+}
 
 /**
- * Collapse a long tail into "Other" so a categorical chart never needs a 9th
- * hue. Returns the top `limit` by actual headcount plus one rolled-up row.
+ * Collapse a long tail into "Other" so a categorical chart never needs a
+ * ninth hue.
  */
 export function withOther(groups: GroupRow[], limit: number): GroupRow[] {
   if (groups.length <= limit) return groups;
   const head = groups.slice(0, limit);
   const tail = groups.slice(limit);
   const rolled = tail.reduce<Totals>(
-    (acc, g) => ({ planned: acc.planned + g.planned, actual: acc.actual + g.actual }),
-    { planned: 0, actual: 0 },
+    (acc, g) => ({ committed: acc.committed + g.committed, actual: acc.actual + g.actual }),
+    { committed: 0, actual: 0 },
   );
   return [
     ...head,
     {
       key: `Other (${tail.length})`,
       ...rolled,
-      variance: rolled.actual - rolled.planned,
+      variance: rolled.actual - rolled.committed,
       fillRate: fillRate(rolled),
     },
   ];
@@ -111,7 +147,7 @@ export function withOther(groups: GroupRow[], limit: number): GroupRow[] {
 
 export type Severity = "good" | "warning" | "serious" | "critical";
 
-/** Fill-rate banding. Thresholds are deliberately conservative for site work. */
+/** Fill-rate banding. Over-commitment counts as met, not as a problem. */
 export function severityForFillRate(rate: number | null): Severity {
   if (rate == null) return "good";
   if (rate >= 0.95) return "good";
@@ -121,8 +157,8 @@ export function severityForFillRate(rate: number | null): Severity {
 }
 
 export const severityLabel: Record<Severity, string> = {
-  good: "On plan",
-  warning: "Slight shortfall",
+  good: "On commitment",
+  warning: "Slightly short",
   serious: "Short",
-  critical: "Critical shortfall",
+  critical: "Critically short",
 };

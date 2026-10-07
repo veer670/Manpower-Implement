@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 /** Recharts reads these as plain strings; CSS vars let the theme swap
  *  without a React re-render. */
 export const SERIES = {
-  actual: "var(--series-1)",
-  planned: "var(--series-2)",
+  reported: "var(--series-1)",
+  committed: "var(--series-2)",
   single: "var(--seq-450)",
 } as const;
 

@@ -1,40 +1,60 @@
-/** One row of the daily manpower deployment register. */
-export type ManpowerRow = {
+/**
+ * The roster is master data: contractor type, name and the headcount each
+ * contractor has committed to. It is set up once and changes rarely.
+ */
+export type Contractor = {
+  /** Stable id derived from type + name, so re-importing a sheet matches. */
+  id: string;
+  /** Discipline — Electrical, Fire Fighting, HVAC… */
+  type: string;
+  name: string;
+  /** Headcount committed under the contract. */
+  committed: number;
+  /** Optional, for jobs running across more than one site. */
+  site?: string;
+};
+
+/** One day's reported manpower for one contractor — the user's daily input. */
+export type DailyEntry = {
   /** ISO date, yyyy-mm-dd */
   date: string;
-  site: string;
-  contractor: string;
-  /** Trade / skill category, e.g. Mason, Carpenter, Helper */
-  trade: string;
-  /** Heads planned for that site/trade/day */
-  planned: number;
-  /** Heads that actually reported */
+  contractorId: string;
   actual: number;
 };
 
+export type AppData = {
+  contractors: Contractor[];
+  entries: DailyEntry[];
+  /** Roster file name, or "Sample roster". */
+  source: string;
+  loadedAt: string;
+  isSample: boolean;
+};
+
 export type Filters = {
-  /** null = all dates in the dataset */
   from: string | null;
   to: string | null;
-  /** empty array = all */
+  types: string[];
   sites: string[];
-  contractors: string[];
-  trades: string[];
 };
 
-export const emptyFilters: Filters = {
-  from: null,
-  to: null,
-  sites: [],
-  contractors: [],
-  trades: [],
-};
+export const emptyFilters: Filters = { from: null, to: null, types: [], sites: [] };
 
-/** Shape of a parse attempt, so the UI can report partial success. */
+/** Stable, collision-resistant enough for a roster of a few hundred rows. */
+export function contractorId(type: string, name: string): string {
+  const slug = (s: string) =>
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  return `${slug(type)}__${slug(name)}`;
+}
+
 export type ParseResult = {
-  rows: ManpowerRow[];
-  /** Human-readable problems, one per offending row (capped by the parser). */
+  contractors: Contractor[];
+  /** Today's Manpower column, when the sheet carried one. */
+  actuals: Map<string, number>;
+  hadActualColumn: boolean;
   warnings: string[];
-  /** Columns the parser matched, for the "we read your sheet as…" summary. */
-  mapping: Record<keyof ManpowerRow, string | null>;
 };

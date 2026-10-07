@@ -39,8 +39,8 @@ export default function DeploymentTrend({ data }: Props) {
       <div className="mb-3">
         <Legend
           items={[
-            { label: "Actual deployed", color: SERIES.actual, shape: "line" },
-            { label: "Planned", color: SERIES.planned, shape: "line" },
+            { label: "Reported", color: SERIES.reported, shape: "line" },
+            { label: "Committed", color: SERIES.committed, shape: "line" },
           ]}
         />
       </div>
@@ -68,35 +68,35 @@ export default function DeploymentTrend({ data }: Props) {
             cursor={{ stroke: AXIS_COLOR, strokeWidth: 1 }}
           />
           <Line
-            dataKey="planned"
-            name="Planned"
-            stroke={SERIES.planned}
+            dataKey="committed"
+            name="Committed"
+            stroke={SERIES.committed}
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
             dot={false}
-            activeDot={{ r: 4, fill: SERIES.planned, stroke: SURFACE, strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: SERIES.committed, stroke: SURFACE, strokeWidth: 2 }}
           />
           <Line
             dataKey="actual"
-            name="Actual deployed"
-            stroke={SERIES.actual}
+            name="Reported"
+            stroke={SERIES.reported}
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
             dot={false}
-            activeDot={{ r: 4, fill: SERIES.actual, stroke: SURFACE, strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: SERIES.reported, stroke: SURFACE, strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>
       <p className="mt-1 text-right text-xs text-ink-secondary">
         <span
           aria-hidden
-          style={{ background: SERIES.actual }}
+          style={{ background: SERIES.reported }}
           className="mr-1.5 inline-block h-0.5 w-4 rounded-full align-middle"
         />
         {shortDate(last.date)}: <span className="tnum font-medium text-ink">{num(last.actual)}</span>{" "}
-        deployed
+        reported
       </p>
     </div>
   );
@@ -107,11 +107,11 @@ type TooltipPayload = { payload?: { payload: TrendPoint }[]; active?: boolean };
 function TrendTooltip({ active, payload }: TooltipPayload) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
-  const rate = p.planned > 0 ? p.actual / p.planned : null;
+  const rate = p.committed > 0 ? p.actual / p.committed : null;
   return (
     <TooltipShell title={longDate(p.date)}>
-      <TooltipRow color={SERIES.actual} label="Actual deployed" value={num(p.actual)} />
-      <TooltipRow color={SERIES.planned} label="Planned" value={num(p.planned)} />
+      <TooltipRow color={SERIES.reported} label="Reported" value={num(p.actual)} />
+      <TooltipRow color={SERIES.committed} label="Committed" value={num(p.committed)} />
       <TooltipRow label="Fill rate" value={pct(rate)} />
     </TooltipShell>
   );

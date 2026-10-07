@@ -29,8 +29,8 @@ type Props = { data: GroupRow[] };
  * title says what is plotted. Values ride outside the bar tip, so no
  * label is ever clipped by a short bar.
  */
-export default function TradeMix({ data }: Props) {
-  if (data.length === 0) return <EmptyPlot message="No trades in the current selection." />;
+export default function TypeMix({ data }: Props) {
+  if (data.length === 0) return <EmptyPlot message="Nothing entered for the current selection." />;
 
   const height = Math.max(200, data.length * 34 + 48);
 
@@ -57,7 +57,7 @@ export default function TradeMix({ data }: Props) {
           axisLine={false}
           width={150}
         />
-        <Tooltip content={<TradeTooltip />} cursor={{ fill: GRID_COLOR, fillOpacity: 0.4 }} />
+        <Tooltip content={<TypeTooltip />} cursor={{ fill: GRID_COLOR, fillOpacity: 0.4 }} />
         <Bar dataKey="actual" fill={SERIES.single} maxBarSize={24} radius={[0, 4, 4, 0]}>
           <LabelList
             dataKey="actual"
@@ -71,7 +71,7 @@ export default function TradeMix({ data }: Props) {
   );
 }
 
-function TradeTooltip({
+function TypeTooltip({
   active,
   payload,
 }: {
@@ -82,8 +82,8 @@ function TradeTooltip({
   const p = payload[0].payload;
   return (
     <TooltipShell title={p.key}>
-      <TooltipRow color={SERIES.single} label="Actual deployed" value={num(p.actual)} />
-      <TooltipRow label="Planned" value={num(p.planned)} />
+      <TooltipRow color={SERIES.single} label="Reported" value={num(p.actual)} />
+      <TooltipRow label="Committed" value={num(p.committed)} />
       <TooltipRow label="Variance" value={signed(p.variance)} />
       <TooltipRow label="Fill rate" value={pct(p.fillRate)} />
     </TooltipShell>

@@ -1,44 +1,60 @@
 import * as XLSX from "xlsx";
-import type { ManpowerRow, ParseResult } from "./types";
+import { contractorId, type Contractor, type ParseResult } from "./types";
+
+type Field = "type" | "name" | "committed" | "actual" | "site";
 
 /**
- * Header aliases, in priority order. Site registers come in from many hands,
- * so we match on a normalised key rather than an exact column name.
+ * Header aliases, in priority order. Registers come in from many hands, so
+ * matching is on a normalised key rather than an exact column name.
  */
-const ALIASES: Record<keyof ManpowerRow, string[]> = {
-  date: ["date", "day", "reportdate", "attendancedate", "dt"],
-  site: ["site", "sitename", "project", "projectname", "location", "tower", "block"],
-  contractor: [
+const ALIASES: Record<Field, string[]> = {
+  type: [
+    "contractortype",
+    "type",
+    "discipline",
+    "trade",
+    "category",
+    "service",
+    "workcategory",
+    "scope",
+  ],
+  name: [
+    "contractorname",
+    "name",
     "contractor",
     "subcontractor",
     "vendor",
     "agency",
-    "labourcontractor",
-    "laborcontractor",
+    "agencyname",
     "party",
+    "firm",
   ],
-  trade: [
-    "trade",
-    "skill",
-    "category",
-    "designation",
-    "labourtype",
-    "labortype",
-    "manpowertype",
-    "activity",
+  committed: [
+    "committed",
+    "commitment",
+    "committedmanpower",
+    "planned",
+    "required",
+    "requirement",
+    "target",
+    "agreed",
+    "contracted",
   ],
-  planned: ["planned", "plan", "required", "requirement", "target", "budgeted", "plannedmanpower"],
   actual: [
+    "todaysmanpower",
+    "todaymanpower",
+    "todays",
     "actual",
+    "actualmanpower",
     "deployed",
     "present",
-    "reported",
     "attendance",
-    "actualmanpower",
-    "count",
-    "headcount",
+    "reported",
     "strength",
+    "headcount",
+    "manpower",
   ],
+  site: ["site", "sitename", "project", "projectname", "location", "tower", "block"],
 };
 
 const norm = (s: unknown) =>
@@ -46,14 +62,16 @@ const norm = (s: unknown) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
-function buildMapping(headers: string[]): Record<keyof ManpowerRow, string | null> {
+function buildMapping(headers: string[]): Record<Field, string | null> {
   const normalised = headers.map((h) => ({ raw: h, key: norm(h) }));
   const taken = new Set<string>();
-  const mapping = {} as Record<keyof ManpowerRow, string | null>;
+  const mapping = {} as Record<Field, string | null>;
 
-  for (const field of Object.keys(ALIASES) as (keyof ManpowerRow)[]) {
+  // "Committed" before "Today's Manpower": both can match loose manpower
+  // aliases, and claiming the committed column first stops the daily figure
+  // being read as the commitment.
+  for (const field of ["type", "name", "committed", "actual", "site"] as Field[]) {
     let hit: string | null = null;
-    // Exact alias match first, then a contains-match, so "Planned Nos." still lands.
     for (const alias of ALIASES[field]) {
       const exact = normalised.find((h) => h.key === alias && !taken.has(h.raw));
       if (exact) {
@@ -76,160 +94,116 @@ function buildMapping(headers: string[]): Record<keyof ManpowerRow, string | nul
   return mapping;
 }
 
-const iso = (y: number, m: number, d: number): string =>
-  `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
-/**
- * Excel stores dates as serial numbers; CSVs hand us strings of every shape.
- *
- * Two traps worth naming, both of which produced wrong dates here before:
- * never go through `toISOString()` on a local-midnight Date (east of UTC it
- * lands on the previous day), and never let the day/month order be decided by
- * the machine's locale.
- */
-function toISODate(value: unknown): string | null {
-  if (value == null || value === "") return null;
-
-  // Local components, not toISOString() — the latter shifts the date in any
-  // timezone ahead of UTC.
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return iso(value.getFullYear(), value.getMonth() + 1, value.getDate());
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    return parsed && parsed.y ? iso(parsed.y, parsed.m, parsed.d) : null;
-  }
-
-  const text = String(value).trim();
-
-  // yyyy-mm-dd / yyyy/mm/dd — unambiguous, so it wins.
-  let m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(text);
-  if (m) return iso(+m[1], +m[2], +m[3]);
-
-  // Two-part-then-year. Disambiguate by value where we can; otherwise assume
-  // day-first, which is what Indian site registers use.
-  m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(text);
-  if (m) {
-    const a = +m[1];
-    const b = +m[2];
-    const year = +m[3];
-    const [day, month] = a > 12 ? [a, b] : b > 12 ? [b, a] : [a, b];
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    return iso(year, month, day);
-  }
-
-  // "7 Oct 2026", "Oct 7 2026" and similar. Read back in local components so
-  // this path cannot shift either.
-  const fallback = new Date(text);
-  if (!Number.isNaN(fallback.getTime())) {
-    return iso(fallback.getFullYear(), fallback.getMonth() + 1, fallback.getDate());
-  }
-
-  return null;
-}
-
 function toCount(value: unknown): number | null {
-  if (value == null || value === "") return 0;
+  if (value == null || value === "") return null;
   if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : null;
   const cleaned = String(value).replace(/[,\s]/g, "");
-  if (cleaned === "" || cleaned === "-") return 0;
+  if (cleaned === "" || cleaned === "-") return null;
   const n = Number(cleaned);
-  return Number.isFinite(n) ? Math.round(n) : null;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
 const MAX_WARNINGS = 25;
 
-/** Parse an .xlsx/.xls/.csv buffer into manpower rows. First sheet wins. */
-export function parseWorkbook(data: ArrayBuffer): ParseResult {
-  // raw: true stops SheetJS guessing types on CSV text. Without it "01-10-2026"
-  // is silently read as 10 January, because its guess is month-first.
+/**
+ * Parse a roster sheet. The first sheet wins. Contractor type, name and
+ * committed headcount are the master data; a "Today's Manpower" column is
+ * optional and, when present, is returned separately so the caller can file
+ * it against whichever date the user is entering.
+ */
+export function parseRoster(data: ArrayBuffer): ParseResult {
+  // raw: true stops SheetJS guessing types on CSV text.
   const wb = XLSX.read(data, { type: "array", raw: true, cellDates: false });
   const sheetName = wb.SheetNames[0];
-  const warnings: string[] = [];
+  const empty: ParseResult = {
+    contractors: [],
+    actuals: new Map(),
+    hadActualColumn: false,
+    warnings: [],
+  };
 
-  if (!sheetName) {
-    return {
-      rows: [],
-      warnings: ["The file has no sheets in it."],
-      mapping: {} as ParseResult["mapping"],
-    };
-  }
+  if (!sheetName) return { ...empty, warnings: ["The file has no sheets in it."] };
 
-  const sheet = wb.Sheets[sheetName];
-  // raw: true keeps Excel date cells as serial numbers, which toISODate reads
-  // without a timezone in the loop.
-  const table = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+  const table = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], {
     defval: "",
     raw: true,
   });
 
-  if (table.length === 0) {
-    return {
-      rows: [],
-      warnings: [`Sheet "${sheetName}" is empty.`],
-      mapping: {} as ParseResult["mapping"],
-    };
-  }
+  if (table.length === 0) return { ...empty, warnings: [`Sheet "${sheetName}" is empty.`] };
 
   const headers = Object.keys(table[0]);
   const mapping = buildMapping(headers);
 
-  const missing = (["date", "site", "actual"] as const).filter((f) => !mapping[f]);
+  const missing = (["type", "name", "committed"] as const).filter((f) => !mapping[f]);
   if (missing.length > 0) {
+    const labels: Record<string, string> = {
+      type: "Contractor Type",
+      name: "Contractor Name",
+      committed: "Committed",
+    };
     return {
-      rows: [],
+      ...empty,
       warnings: [
-        `Could not find a column for: ${missing.join(", ")}. ` +
+        `Could not find a column for: ${missing.map((f) => labels[f]).join(", ")}. ` +
           `Columns in your sheet: ${headers.join(", ")}.`,
       ],
-      mapping,
     };
   }
 
-  const rows: ManpowerRow[] = [];
+  const warnings: string[] = [];
+  const contractors: Contractor[] = [];
+  const actuals = new Map<string, number>();
+  const seen = new Set<string>();
 
   table.forEach((raw, i) => {
-    const sheetLine = i + 2; // +1 for zero-index, +1 for the header row
-    const date = toISODate(raw[mapping.date!]);
-    const site = String(raw[mapping.site!] ?? "").trim();
-    const actual = toCount(raw[mapping.actual!]);
-    const planned = mapping.planned ? toCount(raw[mapping.planned]) : null;
+    const sheetLine = i + 2; // +1 zero-index, +1 header row
+    const type = String(raw[mapping.type!] ?? "").trim();
+    const name = String(raw[mapping.name!] ?? "").trim();
 
-    if (!date) {
+    // A blank line between blocks is normal in a hand-kept sheet, not an error.
+    if (!type && !name) return;
+
+    if (!name) {
       if (warnings.length < MAX_WARNINGS)
-        warnings.push(`Row ${sheetLine}: unreadable date "${raw[mapping.date!]}" — skipped.`);
+        warnings.push(`Row ${sheetLine}: no contractor name — skipped.`);
       return;
     }
-    if (!site) {
-      if (warnings.length < MAX_WARNINGS) warnings.push(`Row ${sheetLine}: no site — skipped.`);
-      return;
-    }
-    if (actual == null) {
+    if (!type) {
       if (warnings.length < MAX_WARNINGS)
-        warnings.push(`Row ${sheetLine}: unreadable headcount "${raw[mapping.actual!]}" — skipped.`);
+        warnings.push(`Row ${sheetLine}: "${name}" has no contractor type — skipped.`);
       return;
     }
 
-    rows.push({
-      date,
-      site,
-      contractor: mapping.contractor
-        ? String(raw[mapping.contractor] ?? "").trim() || "Unassigned"
-        : "Unassigned",
-      trade: mapping.trade ? String(raw[mapping.trade] ?? "").trim() || "Unspecified" : "Unspecified",
-      // No planned column is a legitimate sheet shape; treat plan as equal to
-      // actual so fill-rate reads 100% rather than a misleading zero.
-      planned: planned ?? actual,
-      actual,
-    });
+    const committed = toCount(raw[mapping.committed!]);
+    if (committed == null) {
+      if (warnings.length < MAX_WARNINGS)
+        warnings.push(
+          `Row ${sheetLine}: "${name}" has an unreadable committed figure ` +
+            `("${raw[mapping.committed!]}") — skipped.`,
+        );
+      return;
+    }
+
+    const id = contractorId(type, name);
+    if (seen.has(id)) {
+      if (warnings.length < MAX_WARNINGS)
+        warnings.push(`Row ${sheetLine}: "${name}" under ${type} appears twice — kept the first.`);
+      return;
+    }
+    seen.add(id);
+
+    const site = mapping.site ? String(raw[mapping.site] ?? "").trim() : "";
+    contractors.push({ id, type, name, committed, ...(site ? { site } : {}) });
+
+    if (mapping.actual) {
+      const actual = toCount(raw[mapping.actual]);
+      if (actual != null) actuals.set(id, actual);
+    }
   });
 
-  if (!mapping.planned) {
-    warnings.push(
-      "No planned/required column found — planned has been set equal to actual, so variance reads zero.",
-    );
+  if (contractors.length === 0 && warnings.length === 0) {
+    warnings.push("No contractor rows found in that sheet.");
   }
 
-  return { rows, warnings, mapping };
+  return { contractors, actuals, hadActualColumn: Boolean(mapping.actual), warnings };
 }

@@ -1,175 +1,214 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import Card from "@/components/Card";
 import FilterBar from "@/components/FilterBar";
-import SiteTable from "@/components/SiteTable";
+import GroupTable from "@/components/GroupTable";
 import StatTile from "@/components/StatTile";
-import DeploymentTrend from "@/components/charts/DeploymentTrend";
-import PlannedVsActual from "@/components/charts/PlannedVsActual";
-import TradeMix from "@/components/charts/TradeMix";
+import CommittedVsReported from "@/components/charts/CommittedVsReported";
+import ManpowerTrend from "@/components/charts/ManpowerTrend";
+import TypeMix from "@/components/charts/TypeMix";
 import { compact, longDate, num, pct, shortDate, signed } from "@/lib/format";
 import {
-  applyFilters,
-  bySite,
-  byTrade,
-  dateRange,
-  distinct,
+  allDates,
+  byContractor,
+  byType,
   fillRate,
-  sum,
+  latestDate,
+  rowsForDate,
+  totalsForRows,
   trend,
+  visibleContractors,
+  visibleEntries,
   withOther,
 } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
 
 export default function DashboardPage() {
-  const { dataset, filters } = useStore();
+  const { data, filters } = useStore();
 
   const view = useMemo(() => {
-    const rows = applyFilters(dataset.rows, filters);
-    const range = dateRange(rows);
-    const latest = range?.max ?? null;
+    const roster = visibleContractors(data, filters);
+    const entries = visibleEntries(data, filters, roster);
+    const dates = allDates(entries);
+    const day = latestDate(entries);
 
-    const today = latest ? rows.filter((r) => r.date === latest) : [];
-    const todayTotals = sum(today);
+    const dayRows = day ? rowsForDate(roster, entries, day) : [];
+    const dayTotals = totalsForRows(dayRows);
 
-    // Previous day present in the slice, for the delta on the hero tile.
-    const dates = [...new Set(rows.map((r) => r.date))].sort();
-    const prevDate = dates.length > 1 ? dates[dates.length - 2] : null;
-    const prevTotals = prevDate ? sum(rows.filter((r) => r.date === prevDate)) : null;
+    const prevDay = dates.length > 1 ? dates[dates.length - 2] : null;
+    const prevTotals = prevDay ? totalsForRows(rowsForDate(roster, entries, prevDay)) : null;
 
     return {
-      rows,
-      range,
-      latest,
-      prevDate,
-      todayTotals,
+      roster,
+      dates,
+      day,
+      prevDay,
+      dayRows,
+      dayTotals,
       prevTotals,
-      periodTotals: sum(rows),
-      sites: bySite(rows),
-      trades: withOther(byTrade(rows), 8),
-      trendPoints: trend(rows),
-      siteCount: distinct(rows, (r) => r.site).length,
-      contractorCount: distinct(rows, (r) => r.contractor).length,
+      types: withOther(byType(dayRows), 8),
+      contractors: byContractor(dayRows),
+      trendPoints: trend(roster, entries),
+      entered: dayRows.filter((r) => r.actual != null).length,
     };
-  }, [dataset.rows, filters]);
+  }, [data, filters]);
 
   const {
-    rows,
-    range,
-    latest,
-    prevDate,
-    todayTotals,
+    roster,
+    day,
+    prevDay,
+    dayRows,
+    dayTotals,
     prevTotals,
-    periodTotals,
-    sites,
-    trades,
+    types,
+    contractors,
     trendPoints,
-    siteCount,
-    contractorCount,
+    entered,
   } = view;
 
-  const todayRate = fillRate(todayTotals);
-  const periodRate = fillRate(periodTotals);
-  const shortfall = todayTotals.planned - todayTotals.actual;
+  const rate = fillRate(dayTotals);
+  const shortfall = Math.max(0, dayTotals.committed - dayTotals.actual);
+  const shortContractors = contractors.filter((c) => (c.fillRate ?? 1) < 0.95).length;
 
-  const headDelta = prevTotals
+  const delta = prevTotals
     ? {
-        text: `${signed(todayTotals.actual - prevTotals.actual)} vs ${
-          prevDate ? shortDate(prevDate) : "the previous day"
+        text: `${signed(dayTotals.actual - prevTotals.actual)} vs ${
+          prevDay ? shortDate(prevDay) : "the previous day"
         }`,
         direction:
-          todayTotals.actual === prevTotals.actual
+          dayTotals.actual === prevTotals.actual
             ? ("flat" as const)
-            : todayTotals.actual > prevTotals.actual
+            : dayTotals.actual > prevTotals.actual
               ? ("up" as const)
               : ("down" as const),
-        good: todayTotals.actual >= prevTotals.actual,
+        good: dayTotals.actual >= prevTotals.actual,
       }
     : undefined;
+
+  if (roster.length === 0) {
+    return <Empty message="No contractors on the roster yet." />;
+  }
+  if (!day) {
+    return <Empty message="No manpower has been entered yet." entry />;
+  }
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Site manpower deployment</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Manpower deployment</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          {range ? (
-            <>
-              {longDate(range.min)} — {longDate(range.max)} · {num(rows.length)} register rows ·{" "}
-              <span className="text-ink-muted">{dataset.source}</span>
-            </>
-          ) : (
-            "No rows in the current selection."
-          )}
+          {longDate(day)} · {num(entered)} of {num(dayRows.length)} contractors reported ·{" "}
+          <span className="text-ink-muted">{data.source}</span>
         </p>
       </div>
 
-      <FilterBar allRows={dataset.rows} />
+      <FilterBar />
 
-      {/* Four tiles; exactly one hero figure on the view. */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label={latest ? `Deployed on ${longDate(latest).replace(/^\w+, /, "")}` : "Deployed"}
-          value={compact(todayTotals.actual)}
+          label={`Manpower on ${longDate(day).replace(/^\w+, /, "")}`}
+          value={compact(dayTotals.actual)}
           hero
-          delta={headDelta}
+          delta={delta}
           footnote={
-            todayTotals.planned > 0 ? `against ${num(todayTotals.planned)} planned` : undefined
+            dayTotals.committed > 0 ? `against ${num(dayTotals.committed)} committed` : undefined
           }
         />
         <StatTile
-          label="Fill rate, latest day"
-          value={pct(todayRate, 1)}
-          footnote={`${pct(periodRate, 1)} across the whole period`}
+          label="Fill rate"
+          value={pct(rate, 1)}
+          footnote="Reported against committed, for contractors who reported"
         />
         <StatTile
-          label="Shortfall, latest day"
-          value={shortfall > 0 ? num(shortfall) : "0"}
+          label="Shortfall"
+          value={num(shortfall)}
           unit="heads"
           footnote={
-            shortfall > 0
-              ? `${sites.filter((s) => (s.fillRate ?? 1) < 0.95).length} of ${siteCount} sites below 95%`
-              : "Every site met its plan"
+            shortContractors > 0
+              ? `${num(shortContractors)} of ${num(contractors.length)} contractors below 95%`
+              : "Every contractor met its commitment"
           }
         />
         <StatTile
-          label="Active sites"
-          value={num(siteCount)}
-          footnote={`${num(contractorCount)} contractor${contractorCount === 1 ? "" : "s"} engaged`}
+          label="Contractors reported"
+          value={`${num(entered)}`}
+          unit={`of ${num(dayRows.length)}`}
+          footnote={
+            entered < dayRows.length ? (
+              <Link href="/entry" className="underline underline-offset-2 hover:text-ink">
+                Fill in the rest
+              </Link>
+            ) : (
+              "Full attendance recorded"
+            )
+          }
         />
       </div>
 
-      <Card
-        title="Deployment against plan, day by day"
-        subtitle="Both series are headcounts on a single axis."
-      >
-        <DeploymentTrend data={trendPoints} />
-      </Card>
+      {trendPoints.length > 1 && (
+        <Card
+          title="Manpower against commitment, day by day"
+          subtitle="Both series are headcounts on a single axis."
+        >
+          <ManpowerTrend data={trendPoints} />
+        </Card>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-5">
         <Card
-          title="Planned versus actual, by site"
-          subtitle="Totals across the selected period."
+          title="Committed versus reported, by contractor type"
+          subtitle={longDate(day)}
           className="xl:col-span-3"
         >
-          <PlannedVsActual data={sites} dimension="site" />
+          <CommittedVsReported data={types} dimension="contractor type" />
         </Card>
 
         <Card
-          title="Actual deployment by trade"
-          subtitle="Heads deployed across the selected period."
+          title="Manpower by contractor type"
+          subtitle={`Heads reported on ${longDate(day).replace(/^\w+, /, "")}.`}
           className="xl:col-span-2"
         >
-          <TradeMix data={trades} />
+          <TypeMix data={types} />
         </Card>
       </div>
 
       <Card
-        title="Site-wise detail"
-        subtitle="Worst fill rate first — and the readable twin of every chart above."
+        title="By contractor type"
+        subtitle="Worst fill rate first — and the readable twin of the charts above."
       >
-        <SiteTable rows={sites} dimensionLabel="Site" />
+        <GroupTable rows={byTypeSorted(types)} dimensionLabel="Contractor type" />
       </Card>
+
+      <Card
+        title="By contractor"
+        subtitle="Worst fill rate first. Contractors who have not reported are left out."
+      >
+        <GroupTable rows={contractors} dimensionLabel="Contractor" />
+      </Card>
+    </div>
+  );
+}
+
+/** withOther can push "Other" out of fill-rate order; restore it for the table. */
+function byTypeSorted<T extends { fillRate: number | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (a.fillRate ?? Infinity) - (b.fillRate ?? Infinity));
+}
+
+function Empty({ message, entry = false }: { message: string; entry?: boolean }) {
+  return (
+    <div className="mx-auto max-w-[700px] py-16 text-center">
+      <h1 className="text-xl font-semibold tracking-tight text-ink">Manpower deployment</h1>
+      <p className="mt-2 text-sm text-ink-secondary">{message}</p>
+      <div className="mt-5 flex items-center justify-center gap-2">
+        <Link
+          href={entry ? "/entry" : "/roster"}
+          className="rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white"
+        >
+          {entry ? "Enter today's manpower" : "Set up the roster"}
+        </Link>
+      </div>
     </div>
   );
 }

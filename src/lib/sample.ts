@@ -1,30 +1,36 @@
-import type { ManpowerRow } from "./types";
+import { contractorId, type Contractor, type DailyEntry } from "./types";
 
 /**
- * Deterministic seed data: 6 sites × 7 trades × 30 days of an interior
- * fit-out programme, with realistic absenteeism and a couple of sites
- * deliberately running short so the shortfall views have something to show.
+ * Anchored to a fixed date rather than "today": the seed has to be identical
+ * on the server and in the browser or the prerender and the hydrated render
+ * disagree.
  */
-const SITES = [
-  { name: "Tower A — Fit-out", contractor: "Shree Interiors", scale: 1.0, discipline: 0.96 },
-  { name: "Tower B — Fit-out", contractor: "Shree Interiors", scale: 0.85, discipline: 0.91 },
-  { name: "Corporate Office L4", contractor: "Veer Associates", scale: 0.6, discipline: 0.78 },
-  { name: "Retail Mall Phase 2", contractor: "Nova Buildcon", scale: 1.2, discipline: 0.88 },
-  { name: "Hospital Block C", contractor: "Nova Buildcon", scale: 0.7, discipline: 0.64 },
-  { name: "Warehouse Annexe", contractor: "Akhil Labour Co.", scale: 0.45, discipline: 0.93 },
+export const SAMPLE_ANCHOR = "2026-10-07";
+
+/** The roster as it appears in the register this dashboard was built from. */
+const ROSTER: [type: string, name: string, committed: number, today: number][] = [
+  ["Electrical", "Prajapati", 12, 3],
+  ["Electrical", "Amritpal", 15, 12],
+  ["Electrical", "Harjeet Saini", 10, 4],
+  ["Electrical", "Dharmendra", 10, 7],
+  ["Electrical", "Unique Engineering", 10, 10],
+  ["Electrical", "Bijli wala", 10, 20],
+  ["Fire Fighting", "Gara", 10, 3],
+  ["Fire Fighting", "Apex", 8, 4],
+  ["Fire Fighting", "Synoptic", 10, 10],
+  ["Fire Fighting", "Modern Agency", 10, 12],
+  ["Fire Fighting", "Dumex", 10, 3],
 ];
 
-const TRADES = [
-  { name: "Helper", weight: 0.3 },
-  { name: "Mason", weight: 0.16 },
-  { name: "Carpenter", weight: 0.15 },
-  { name: "Electrician", weight: 0.12 },
-  { name: "Painter", weight: 0.1 },
-  { name: "Plumber", weight: 0.09 },
-  { name: "Gypsum / False Ceiling", weight: 0.08 },
-];
+export const sampleContractors = (): Contractor[] =>
+  ROSTER.map(([type, name, committed]) => ({
+    id: contractorId(type, name),
+    type,
+    name,
+    committed,
+  }));
 
-/** Mulberry32 — small, seeded, so every reload shows the same numbers. */
+/** Mulberry32 — seeded, so every reload shows the same numbers. */
 function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -36,57 +42,45 @@ function rng(seed: number) {
 }
 
 /**
- * Anchor the sample window to a fixed date rather than "today": the dataset
- * has to be identical on the server and in the browser, or the prerender and
- * the hydrated render disagree.
+ * The anchor day carries the exact figures from the register; the days before
+ * it are plausible variations around each contractor's own showing, so the
+ * trend has something to plot.
  */
-export const SAMPLE_ANCHOR = "2026-10-07";
-
-export function generateSampleRows(days = 30, anchor = SAMPLE_ANCHOR): ManpowerRow[] {
-  const endDate = new Date(`${anchor}T00:00:00Z`);
+export function sampleEntries(days = 14, anchor = SAMPLE_ANCHOR): DailyEntry[] {
   const rand = rng(20261007);
-  const rows: ManpowerRow[] = [];
+  const end = new Date(`${anchor}T00:00:00Z`);
+  const entries: DailyEntry[] = [];
 
   for (let d = days - 1; d >= 0; d--) {
-    const day = new Date(endDate);
+    const day = new Date(end);
     day.setUTCDate(day.getUTCDate() - d);
     const iso = day.toISOString().slice(0, 10);
-    const dow = day.getUTCDay();
-    // Sunday is a half day on most sites; Saturday runs near-full.
-    const dayFactor = dow === 0 ? 0.35 : dow === 6 ? 0.92 : 1;
-    // The programme ramps up over the month.
-    const ramp = 0.75 + 0.45 * ((days - d) / days);
+    const sunday = day.getUTCDay() === 0;
 
-    for (const site of SITES) {
-      for (const trade of TRADES) {
-        const base = 120 * site.scale * trade.weight * ramp;
-        const planned = Math.max(1, Math.round(base));
-        const show = site.discipline * dayFactor * (0.9 + 0.2 * rand());
-        const actual = Math.max(0, Math.min(planned + 2, Math.round(planned * show)));
-        rows.push({
-          date: iso,
-          site: site.name,
-          contractor: site.contractor,
-          trade: trade.name,
-          planned,
-          actual,
-        });
+    for (const [type, name, , today] of ROSTER) {
+      const id = contractorId(type, name);
+      if (d === 0) {
+        entries.push({ date: iso, contractorId: id, actual: today });
+        continue;
       }
+      const drift = 0.65 + 0.7 * rand();
+      const actual = Math.max(0, Math.round(today * drift * (sunday ? 0.4 : 1)));
+      entries.push({ date: iso, contractorId: id, actual });
     }
   }
-  return rows;
+  return entries;
 }
 
-export const SAMPLE_CSV_HEADERS = "Date,Site,Contractor,Trade,Planned,Actual";
+export const ROSTER_CSV_HEADERS = "Contractor Type,Contractor Name,Committed,Today's Manpower";
 
-/** The downloadable template — same columns the parser looks for. */
-export function sampleCsv(rows: ManpowerRow[]): string {
-  const body = rows
-    .map((r) =>
-      [r.date, r.site, r.contractor, r.trade, r.planned, r.actual]
-        .map((v) => (String(v).includes(",") ? `"${v}"` : String(v)))
-        .join(","),
-    )
+/** The downloadable template — the same columns the importer looks for. */
+export function rosterCsv(contractors: Contractor[], actuals: Map<string, number>): string {
+  const cell = (v: string | number) => {
+    const s = String(v);
+    return /[",]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const body = contractors
+    .map((c) => [c.type, c.name, c.committed, actuals.get(c.id) ?? ""].map(cell).join(","))
     .join("\n");
-  return `${SAMPLE_CSV_HEADERS}\n${body}\n`;
+  return `${ROSTER_CSV_HEADERS}\n${body}\n`;
 }

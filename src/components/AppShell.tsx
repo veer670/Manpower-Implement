@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HardHat, LayoutDashboard, Upload, Users } from "lucide-react";
+import { ClipboardList, HardHat, LayoutDashboard, Users } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import { useStore } from "@/lib/store";
 import { num } from "@/lib/format";
 
 const NAV = [
-  { href: "/", label: "Site deployment", Icon: LayoutDashboard },
-  { href: "/contractors", label: "Contractors", Icon: Users },
-  { href: "/data", label: "Data", Icon: Upload },
+  { href: "/", label: "Dashboard", Icon: LayoutDashboard },
+  { href: "/entry", label: "Daily entry", Icon: ClipboardList },
+  { href: "/roster", label: "Roster", Icon: Users },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { dataset } = useStore();
+  const { data } = useStore();
 
   return (
     <div className="flex min-h-full">
@@ -52,12 +52,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto rounded-lg border border-hairline bg-surface-2 p-3">
-          <p className="text-[11px] font-medium text-ink-muted">Current dataset</p>
-          <p className="mt-1 truncate text-xs font-semibold text-ink" title={dataset.source}>
-            {dataset.source}
+          <p className="text-[11px] font-medium text-ink-muted">Roster</p>
+          <p className="mt-1 truncate text-xs font-semibold text-ink" title={data.source}>
+            {data.source}
           </p>
           <p className="mt-0.5 text-[11px] text-ink-secondary">
-            {num(dataset.rows.length)} rows
+            {num(data.contractors.length)} contractors
           </p>
         </div>
       </aside>

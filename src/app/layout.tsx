@@ -9,7 +9,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Manpower Implementation Dashboard",
   description:
-    "Site-wise manpower deployment: planned versus actual headcount, fill rate, trade mix and contractor performance, read straight from your Excel register.",
+    "Daily contractor manpower against commitment: enter today's figures against a pre-filled roster, and read fill rate by contractor type and contractor.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -23,8 +23,8 @@
   --text-muted:     #898781;
 
   /* categorical series (validated: adjacent CVD ΔE 24.7, normal 33.6) */
-  --series-1:       #2a78d6;  /* Actual   */
-  --series-2:       #eb6834;  /* Planned  */
+  --series-1:       #2a78d6;  /* Reported  */
+  --series-2:       #eb6834;  /* Committed */
 
   /* sequential blue, for single-series magnitude */
   --seq-400:        #3987e5;

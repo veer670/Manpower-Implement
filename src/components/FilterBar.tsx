@@ -2,35 +2,31 @@
 
 import { X } from "lucide-react";
 import { useStore } from "@/lib/store";
-import type { ManpowerRow } from "@/lib/types";
-import { distinct, dateRange } from "@/lib/metrics";
+import { allDates, distinctSites, distinctTypes } from "@/lib/metrics";
 
 /**
- * One filter row above everything it scopes — never per-chart filters.
- * Every chart and the table re-render against the same slice.
+ * One filter row above everything it scopes — never per-chart filters. Every
+ * chart and table on the page re-renders against the same slice.
  */
-export default function FilterBar({ allRows }: { allRows: ManpowerRow[] }) {
-  const { filters, setFilters, clearFilters } = useStore();
-  const range = dateRange(allRows);
+export default function FilterBar() {
+  const { data, filters, setFilters, clearFilters } = useStore();
 
-  const sites = distinct(allRows, (r) => r.site);
-  const contractors = distinct(allRows, (r) => r.contractor);
-  const trades = distinct(allRows, (r) => r.trade);
+  const dates = allDates(data.entries);
+  const min = dates[0];
+  const max = dates.at(-1);
+  const types = distinctTypes(data.contractors);
+  const sites = distinctSites(data.contractors);
 
   const active =
-    filters.from ||
-    filters.to ||
-    filters.sites.length > 0 ||
-    filters.contractors.length > 0 ||
-    filters.trades.length > 0;
+    filters.from || filters.to || filters.types.length > 0 || filters.sites.length > 0;
 
   const preset = (days: number) => {
-    if (!range) return;
-    const to = range.max;
-    const from = new Date(`${to}T00:00:00`);
+    if (!max) return;
+    const from = new Date(`${max}T00:00:00`);
     from.setDate(from.getDate() - (days - 1));
-    const fromIso = from.toISOString().slice(0, 10);
-    setFilters((p) => ({ ...p, from: fromIso < range.min ? range.min : fromIso, to }));
+    const p = (n: number) => String(n).padStart(2, "0");
+    const iso = `${from.getFullYear()}-${p(from.getMonth() + 1)}-${p(from.getDate())}`;
+    setFilters((prev) => ({ ...prev, from: min && iso < min ? min : iso, to: max }));
   };
 
   return (
@@ -39,8 +35,8 @@ export default function FilterBar({ allRows }: { allRows: ManpowerRow[] }) {
         <input
           type="date"
           value={filters.from ?? ""}
-          min={range?.min}
-          max={range?.max}
+          min={min}
+          max={max}
           onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value || null }))}
           className={inputClass}
         />
@@ -49,8 +45,8 @@ export default function FilterBar({ allRows }: { allRows: ManpowerRow[] }) {
         <input
           type="date"
           value={filters.to ?? ""}
-          min={range?.min}
-          max={range?.max}
+          min={min}
+          max={max}
           onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value || null }))}
           className={inputClass}
         />
@@ -65,23 +61,22 @@ export default function FilterBar({ allRows }: { allRows: ManpowerRow[] }) {
       </div>
 
       <Select
-        label="Site"
-        value={filters.sites[0] ?? ""}
-        options={sites}
-        onChange={(v) => setFilters((p) => ({ ...p, sites: v ? [v] : [] }))}
+        label="Contractor type"
+        value={filters.types[0] ?? ""}
+        allLabel="All types"
+        options={types}
+        onChange={(v) => setFilters((p) => ({ ...p, types: v ? [v] : [] }))}
       />
-      <Select
-        label="Contractor"
-        value={filters.contractors[0] ?? ""}
-        options={contractors}
-        onChange={(v) => setFilters((p) => ({ ...p, contractors: v ? [v] : [] }))}
-      />
-      <Select
-        label="Trade"
-        value={filters.trades[0] ?? ""}
-        options={trades}
-        onChange={(v) => setFilters((p) => ({ ...p, trades: v ? [v] : [] }))}
-      />
+
+      {sites.length > 1 && (
+        <Select
+          label="Site"
+          value={filters.sites[0] ?? ""}
+          allLabel="All sites"
+          options={sites}
+          onChange={(v) => setFilters((p) => ({ ...p, sites: v ? [v] : [] }))}
+        />
+      )}
 
       {active && (
         <button
@@ -115,11 +110,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Select({
   label,
+  allLabel,
   value,
   options,
   onChange,
 }: {
   label: string;
+  allLabel: string;
   value: string;
   options: string[];
   onChange: (v: string) => void;
@@ -127,7 +124,7 @@ function Select({
   return (
     <Field label={label}>
       <select value={value} onChange={(e) => onChange(e.target.value)} className={inputClass}>
-        <option value="">All {label.toLowerCase()}s</option>
+        <option value="">{allLabel}</option>
         {options.map((o) => (
           <option key={o} value={o}>
             {o}

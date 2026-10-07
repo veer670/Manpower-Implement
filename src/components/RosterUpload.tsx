@@ -1,17 +1,32 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Download, FileSpreadsheet, RotateCcw, TriangleAlert, Upload } from "lucide-react";
-import { parseWorkbook } from "@/lib/parse";
+import { useRef, useState, useSyncExternalStore } from "react";
+import {
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  RotateCcw,
+  TriangleAlert,
+  Upload,
+} from "lucide-react";
+import { parseRoster } from "@/lib/parse";
+import { replaceRoster, resetToSample, saveDay } from "@/lib/dataset";
+import { longDate, num } from "@/lib/format";
+import { rosterCsv } from "@/lib/sample";
 import { useStore } from "@/lib/store";
-import { num } from "@/lib/format";
-import { sampleCsv } from "@/lib/sample";
+import * as todayStore from "@/lib/today";
 
-export default function UploadPanel() {
-  const { dataset, setDataset, resetToSample } = useStore();
+export default function RosterUpload() {
+  const { data } = useStore();
+  const today = useSyncExternalStore(
+    todayStore.subscribe,
+    todayStore.getSnapshot,
+    todayStore.getServerSnapshot,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -19,13 +34,25 @@ export default function UploadPanel() {
     setBusy(true);
     setError(null);
     setWarnings([]);
+    setNote(null);
     try {
-      const buffer = await file.arrayBuffer();
-      const result = parseWorkbook(buffer);
-      if (result.rows.length === 0) {
-        setError(result.warnings.join(" ") || "No usable rows found in that file.");
+      const result = parseRoster(await file.arrayBuffer());
+      if (result.contractors.length === 0) {
+        setError(result.warnings.join(" ") || "No contractor rows found in that file.");
       } else {
-        setDataset(result.rows, file.name);
+        replaceRoster(result.contractors, file.name);
+        // A sheet that also carries the day's figures is filed against today,
+        // which is what a freshly exported register is.
+        if (result.hadActualColumn && result.actuals.size > 0 && today) {
+          saveDay(today, new Map(result.actuals));
+          setNote(
+            `${num(result.contractors.length)} contractors loaded. ` +
+              `${num(result.actuals.size)} manpower figures were saved against ${longDate(today)} — ` +
+              `change the date under Daily entry if they belong to another day.`,
+          );
+        } else {
+          setNote(`${num(result.contractors.length)} contractors loaded.`);
+        }
         setWarnings(result.warnings);
       }
     } catch (e) {
@@ -37,11 +64,16 @@ export default function UploadPanel() {
   }
 
   function downloadTemplate() {
-    const csv = sampleCsv(dataset.rows.slice(0, 200));
+    const actuals = new Map(
+      data.entries
+        .filter((e) => e.date === (today ?? ""))
+        .map((e) => [e.contractorId, e.actual] as const),
+    );
+    const csv = rosterCsv(data.contractors, actuals);
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = "manpower-template.csv";
+    a.download = "contractor-roster.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -64,9 +96,14 @@ export default function UploadPanel() {
           dragging ? "border-series-1 bg-surface-2" : "border-hairline"
         }`}
       >
-        <FileSpreadsheet size={28} strokeWidth={1.6} className="mx-auto text-ink-muted" aria-hidden />
+        <FileSpreadsheet
+          size={28}
+          strokeWidth={1.6}
+          className="mx-auto text-ink-muted"
+          aria-hidden
+        />
         <p className="mt-3 text-sm font-medium text-ink">
-          Drop your manpower register here, or pick a file
+          Drop your contractor sheet here, or pick a file
         </p>
         <p className="mt-1 text-xs text-ink-secondary">
           .xlsx, .xls or .csv — first sheet is read. Nothing leaves your browser.
@@ -86,11 +123,16 @@ export default function UploadPanel() {
             className="flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
           >
             <Download size={14} strokeWidth={2.4} aria-hidden />
-            Download template
+            Download as sheet
           </button>
-          {!dataset.isSample && (
+          {!data.isSample && (
             <button
-              onClick={resetToSample}
+              onClick={() => {
+                resetToSample();
+                setNote(null);
+                setWarnings([]);
+                setError(null);
+              }}
               className="flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
             >
               <RotateCcw size={14} strokeWidth={2.4} aria-hidden />
@@ -112,27 +154,31 @@ export default function UploadPanel() {
       </div>
 
       <div className="rounded-xl border border-hairline bg-surface-1 p-4">
-        <h3 className="text-xs font-semibold text-ink">Columns the dashboard looks for</h3>
+        <h3 className="text-xs font-semibold text-ink">Columns the importer looks for</h3>
         <p className="mt-1 text-xs text-ink-secondary">
-          Header names are matched loosely, so <code className="text-ink">Site Name</code>,{" "}
-          <code className="text-ink">Project</code> and <code className="text-ink">Location</code>{" "}
-          all land on <strong className="text-ink">Site</strong>.
+          Header names are matched loosely, so <code className="text-ink">Type</code>,{" "}
+          <code className="text-ink">Discipline</code> and{" "}
+          <code className="text-ink">Trade</code> all land on{" "}
+          <strong className="text-ink">Contractor Type</strong>.
         </p>
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
           {[
-            ["Date", "required — dd-mm-yyyy, yyyy-mm-dd or an Excel date"],
-            ["Site", "required — site, project, location, tower, block"],
-            ["Actual", "required — actual, deployed, present, attendance, strength"],
-            ["Planned", "optional — planned, required, target, budgeted"],
-            ["Contractor", "optional — contractor, subcontractor, vendor, agency"],
-            ["Trade", "optional — trade, skill, designation, category"],
-          ].map(([field, note]) => (
+            ["Contractor Type", "required — type, discipline, trade, category"],
+            ["Contractor Name", "required — name, contractor, agency, vendor, firm"],
+            ["Committed", "required — commitment, agreed, contracted, required"],
+            ["Today's Manpower", "optional — actual, deployed, present, attendance"],
+            ["Site", "optional — only if you run more than one site"],
+          ].map(([field, hint]) => (
             <div key={field} className="flex gap-2">
-              <dt className="min-w-[72px] font-medium text-ink">{field}</dt>
-              <dd className="text-ink-secondary">{note}</dd>
+              <dt className="min-w-[132px] font-medium text-ink">{field}</dt>
+              <dd className="text-ink-secondary">{hint}</dd>
             </div>
           ))}
         </dl>
+        <p className="mt-3 text-xs text-ink-secondary">
+          Importing replaces the roster. Saved manpower for contractors still on the new
+          roster is kept.
+        </p>
       </div>
 
       {error && (
@@ -141,8 +187,14 @@ export default function UploadPanel() {
         </Notice>
       )}
 
+      {note && !error && (
+        <Notice tone="good" title="Roster updated">
+          {note}
+        </Notice>
+      )}
+
       {warnings.length > 0 && (
-        <Notice tone="warning" title={`Loaded with ${num(warnings.length)} note(s)`}>
+        <Notice tone="warning" title={`${num(warnings.length)} row(s) needed attention`}>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {warnings.slice(0, 10).map((w, i) => (
               <li key={i}>{w}</li>
@@ -160,14 +212,24 @@ function Notice({
   title,
   children,
 }: {
-  tone: "critical" | "warning";
+  tone: "critical" | "warning" | "good";
   title: string;
   children: React.ReactNode;
 }) {
-  const color = tone === "critical" ? "var(--critical)" : "var(--warning)";
+  const color =
+    tone === "critical" ? "var(--critical)" : tone === "warning" ? "var(--warning)" : "var(--good)";
+  // Icon carries the tone alongside the colour — a success note must not wear
+  // a warning triangle.
+  const Icon = tone === "good" ? CheckCircle2 : TriangleAlert;
   return (
     <div className="flex gap-2.5 rounded-xl border border-hairline bg-surface-1 p-4">
-      <TriangleAlert size={16} strokeWidth={2.2} style={{ color }} className="mt-0.5 shrink-0" aria-hidden />
+      <Icon
+        size={16}
+        strokeWidth={2.2}
+        style={{ color }}
+        className="mt-0.5 shrink-0"
+        aria-hidden
+      />
       <div className="text-xs">
         <p className="font-semibold text-ink">{title}</p>
         <div className="mt-0.5 text-ink-secondary">{children}</div>

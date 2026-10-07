@@ -1,26 +1,38 @@
 # Manpower Implementation Dashboard
 
-Site-wise manpower deployment for interior fit-out and construction projects:
-planned versus actual headcount, fill rate, trade mix and contractor
-performance — read straight from the daily manpower register you already keep
-in Excel.
+Daily contractor manpower against commitment. The contractor roster is set up
+once; each day you fill in one column — today's manpower — and the dashboard
+does the rest.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06b6d4)
 
-## What it shows
+## How it is split
 
-| View | Answers |
+| | Set up once | Filled in daily |
+|---|---|---|
+| **Contractor Type** | ✓ | |
+| **Contractor Name** | ✓ | |
+| **Committed** | ✓ | |
+| **Today's Manpower** | | ✓ |
+
+That split is the whole design. Type, name and committed headcount are master
+data living on the **Roster** page. **Daily entry** shows them pre-filled and
+read-only, with one editable box per contractor.
+
+## The three screens
+
+| Screen | What it is for |
 |---|---|
-| **Site deployment** | How many heads turned up today against plan, which sites are short, how deployment is trending, and which trades the labour sits in |
-| **Contractors** | Man-days each labour contractor committed versus supplied, and who is weakest |
-| **Data** | Load your register, see exactly how the columns were read |
+| **Dashboard** | Today's manpower against commitment, fill rate, shortfall, the day-by-day trend, and breakdowns by contractor type and by contractor |
+| **Daily entry** | The register, pre-filled. Type the day's figures, see variance and status update live, save |
+| **Roster** | Add, edit and remove contractors; import the whole list from a sheet |
 
 Fill rate is banded so shortfalls surface without reading numbers:
-**≥ 95 %** on plan · **≥ 85 %** slight shortfall · **≥ 70 %** short ·
-**below 70 %** critical. Status is always icon + label + colour, never colour
-alone.
+**≥ 95 %** on commitment · **≥ 85 %** slightly short · **≥ 70 %** short ·
+**below 70 %** critically short. Status is always icon + label + colour, never
+colour alone. Over-supply counts as met, not as a problem.
 
 ## Getting started
 
@@ -29,81 +41,87 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. The dashboard opens on a generated 30-day sample
-programme (6 sites, 7 trades, 4 contractors) so there is something to look at
-before you load anything.
+Open <http://localhost:3000>. It starts on a sample roster so there is
+something to look at before you load your own.
 
-## Loading your own register
+## Importing your sheet
 
-Go to **Data**, then drop in a `.xlsx`, `.xls` or `.csv`. The first sheet is
-read. **Parsing happens entirely in the browser — the file is never uploaded
-anywhere**, and the parsed dataset is kept in `localStorage` so it survives a
-reload.
+**Roster → Import from a sheet**, then drop in a `.xlsx`, `.xls` or `.csv`.
+The first sheet is read. **Parsing happens entirely in the browser — the file
+is never uploaded anywhere**, and everything is kept in `localStorage` so it
+survives a reload.
 
-### Columns
+Header names are matched loosely, so `Type`, `Discipline` and `Trade` all land
+on **Contractor Type**.
 
-Header names are matched loosely, so `Site Name`, `Project` and `Location` all
-land on **Site**.
-
-| Field | Required | Also accepted as |
+| Column | Required | Also accepted as |
 |---|---|---|
-| **Date** | yes | day, report date, attendance date |
-| **Site** | yes | site name, project, location, tower, block |
-| **Actual** | yes | deployed, present, reported, attendance, strength, headcount |
-| **Planned** | no | plan, required, target, budgeted |
-| **Contractor** | no | subcontractor, vendor, agency, party |
-| **Trade** | no | skill, designation, category, labour type |
+| **Contractor Type** | yes | type, discipline, trade, category, scope |
+| **Contractor Name** | yes | name, contractor, agency, vendor, firm, party |
+| **Committed** | yes | commitment, agreed, contracted, required, target |
+| **Today's Manpower** | no | actual, deployed, present, attendance, strength |
+| **Site** | no | project, location, tower, block |
 
-One row per site / trade / contractor / day. Omit **Planned** and it is taken
-as equal to actual, so fill rate reads 100 % rather than a misleading zero —
-the dashboard says so when that happens.
+Include **Today's Manpower** and those figures are saved against today's date —
+change the date under Daily entry if they belong to another day. Leave the
+column out and you just get the roster.
 
-### Dates
+Importing replaces the roster; saved manpower for contractors still on the new
+roster is kept, so correcting a sheet never wipes your history.
 
-`dd-mm-yyyy`, `dd/mm/yyyy`, `yyyy-mm-dd` and native Excel date cells all work.
-Where the day and month are both ≤ 12 and therefore ambiguous, **day-first is
-assumed** (`01-10-2026` is 1 October), which is how Indian site registers are
-written.
+Rows that cannot be used are reported back with their sheet row number rather
+than silently dropped: a missing name, a missing type, an unreadable committed
+figure, or the same contractor listed twice. Blank separator rows between
+blocks are ignored without comment, because hand-kept sheets are full of them.
 
-Rows with an unreadable date, a missing site or an unreadable headcount are
-skipped and reported back to you rather than silently dropped.
+## Notes on behaviour worth knowing
+
+- **An empty box is "not entered", not zero.** A contractor who has not
+  reported is left out of the fill rate entirely rather than counted as having
+  sent nobody — otherwise an unfinished form reads as a disaster.
+- **Committed is a standing figure.** It does not vary by day. Edit it on the
+  Roster page and it applies everywhere.
+- **Dates never shift.** Day-first is assumed where day and month are both
+  ambiguous (`01-10-2026` is 1 October), and nothing goes through
+  `toISOString()`, which moves the date back a day in any timezone ahead of
+  UTC.
 
 ## Project layout
 
 ```
 src/
   app/
-    page.tsx            Site deployment dashboard
-    contractors/        Contractor performance
-    data/               Upload + dataset summary
-    globals.css         Design tokens (light & dark)
+    page.tsx          Dashboard
+    entry/            Daily manpower entry
+    roster/           Contractor master list + import
+    globals.css       Design tokens (light & dark)
   components/
-    charts/             Recharts wrappers + shared chart primitives
-    AppShell.tsx        Sidebar, nav, theme toggle
-    FilterBar.tsx       One filter row, scoping every chart on the page
-    SiteTable.tsx       Readable twin of the charts
+    charts/           Recharts wrappers + shared chart primitives
+    EntryForm.tsx     The daily input table
+    RosterTable.tsx   Master list, editable in place
+    RosterUpload.tsx  Sheet import
+    GroupTable.tsx    Readable twin of the charts
   lib/
-    parse.ts            Excel/CSV → rows, with loose header matching
-    metrics.ts          Aggregation: by site, contractor, trade, day
-    dataset.ts          External store, backed by localStorage
-    sample.ts           Seeded sample programme
+    parse.ts          Sheet → roster, with loose header matching
+    metrics.ts        Aggregation by type, by contractor, by day
+    dataset.ts        External store, backed by localStorage
+    sample.ts         Sample roster
 ```
 
 ## Design notes
 
-Charts follow a few rules worth keeping if you extend this:
+Worth keeping if you extend this:
 
-- **One axis, never two.** Planned and actual are both headcounts, so they
-  share a scale. Two measures of different scale get two charts.
-- **Colour follows the entity.** Actual is always slot 1, planned always
+- **One axis, never two.** Committed and reported are both headcounts, so they
+  share a scale.
+- **Colour follows the entity.** Reported is always slot 1, committed always
   slot 2 — filtering never repaints the survivors.
 - The categorical palette is validated for colour-vision deficiency in both
-  light and dark (worst adjacent ΔE 24.7 light / 26.8 dark, against an
-  ≥ 8 target).
+  light and dark (worst adjacent ΔE 24.7 light / 26.8 dark, against an ≥ 8
+  target).
 - Dark mode is a **selected** set of steps against the dark surface, not an
   automatic inversion.
-- Every charted value is also in the table, so nothing is gated behind a
-  tooltip.
+- Every charted value is also in a table, so nothing is gated behind a tooltip.
 
 ## Scripts
 
@@ -116,6 +134,6 @@ npm run lint    # eslint
 
 ## Status
 
-Working single-user tool. There is no database, no authentication and no
-server-side storage — the dataset lives in the browser. See the issues list
-for what comes next.
+Working single-user tool. No database, no authentication, no server-side
+storage — everything lives in the browser. The next step is a real backend so
+more than one person can enter and read the same figures.

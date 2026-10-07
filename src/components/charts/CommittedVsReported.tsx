@@ -25,11 +25,11 @@ import {
 type Props = { data: GroupRow[]; dimension: string };
 
 /**
- * Grouped columns, planned beside actual on one axis. Bars are capped at
+ * Grouped columns, committed beside reported on one axis. Bars are capped at
  * 24px with a 2px surface gap between neighbours — the gap does the
  * separating, not a stroke.
  */
-export default function PlannedVsActual({ data, dimension }: Props) {
+export default function CommittedVsReported({ data, dimension }: Props) {
   if (data.length === 0) return <EmptyPlot message="Nothing in the current selection." />;
 
   return (
@@ -37,8 +37,8 @@ export default function PlannedVsActual({ data, dimension }: Props) {
       <div className="mb-3">
         <Legend
           items={[
-            { label: "Actual deployed", color: SERIES.actual },
-            { label: "Planned", color: SERIES.planned },
+            { label: "Reported today", color: SERIES.reported },
+            { label: "Committed", color: SERIES.committed },
           ]}
         />
       </div>
@@ -65,15 +65,15 @@ export default function PlannedVsActual({ data, dimension }: Props) {
           <Tooltip content={<GroupTooltip dimension={dimension} />} cursor={{ fill: GRID_COLOR, fillOpacity: 0.4 }} />
           <Bar
             dataKey="actual"
-            name="Actual deployed"
-            fill={SERIES.actual}
+            name="Reported"
+            fill={SERIES.reported}
             maxBarSize={24}
             radius={[4, 4, 0, 0]}
           />
           <Bar
-            dataKey="planned"
-            name="Planned"
-            fill={SERIES.planned}
+            dataKey="committed"
+            name="Committed"
+            fill={SERIES.committed}
             maxBarSize={24}
             radius={[4, 4, 0, 0]}
           />
@@ -94,8 +94,8 @@ function GroupTooltip({ active, payload, dimension }: TooltipPayload) {
   const p = payload[0].payload;
   return (
     <TooltipShell title={`${p.key} · ${dimension}`}>
-      <TooltipRow color={SERIES.actual} label="Actual deployed" value={num(p.actual)} />
-      <TooltipRow color={SERIES.planned} label="Planned" value={num(p.planned)} />
+      <TooltipRow color={SERIES.reported} label="Reported" value={num(p.actual)} />
+      <TooltipRow color={SERIES.committed} label="Committed" value={num(p.committed)} />
       <TooltipRow label="Variance" value={signed(p.variance)} />
       <TooltipRow label="Fill rate" value={pct(p.fillRate)} />
     </TooltipShell>
