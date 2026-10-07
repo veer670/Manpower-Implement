@@ -168,7 +168,10 @@ Worth keeping if you extend this:
   slot 2 — filtering never repaints the survivors.
 - The categorical palette is validated for colour-vision deficiency in both
   light and dark (worst adjacent ΔE 24.7 light / 26.8 dark, against an ≥ 8
-  target).
+  target), and re-validated against the white card surface.
+- **Chrome and data do not share a hue.** Buttons, focus rings and active nav
+  wear `--accent` (bronze); charts wear `--series-*` (blue/orange). Painting a
+  button in a series colour makes it read as a data category.
 - Dark mode is a **selected** set of steps against the dark surface, not an
   automatic inversion.
 - Every charted value is also in a table, so nothing is gated behind a tooltip.

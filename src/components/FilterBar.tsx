@@ -93,7 +93,7 @@ export default function FilterBar() {
 
 const inputClass =
   "rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink " +
-  "focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1";
+  "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
 
 const chipClass =
   "rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs font-medium " +

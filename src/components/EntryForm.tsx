@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { removeContractor, saveDay } from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
@@ -8,7 +8,6 @@ import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
 import DeleteButton from "./DeleteButton";
-import { initialsOf } from "./Table";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -100,6 +99,23 @@ export default function EntryForm({
 
   return (
     <div>
+      {/* Column labels live here once, not on every card. The widths below are
+          shared with the card columns so the two line up. */}
+      <div className="mb-2 hidden items-center gap-x-5 px-4 lg:flex">
+        <span className="flex-1 basis-44" />
+        <span className={`${W.committed} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
+          Committed
+        </span>
+        <span className={`${W.input} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
+          Today&rsquo;s manpower
+        </span>
+        <span className={`${W.variance} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
+          Variance
+        </span>
+        <span className={W.status} />
+        {canEditRoster && <span className="w-11" />}
+      </div>
+
       <div className="space-y-5">
         {blocks.map(([type, block]) => (
           <section key={type}>
@@ -118,77 +134,81 @@ export default function EntryForm({
                 return (
                   <li
                     key={r.id}
-                    className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-series-1/35"
+                    className="group overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
                   >
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
-                      <div className="flex min-w-0 flex-1 basis-56 items-center gap-3.5">
-                        <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
-                          {srNo}
-                        </span>
-                        <span
-                          aria-hidden
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-bold tracking-wide text-ink-secondary"
-                        >
-                          {initialsOf(r.name)}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-                          {r.name}
-                        </span>
-                      </div>
+                    <div className="flex items-stretch">
+                      <div className="min-w-0 flex-1 px-4 py-3">
+                        {/* Identity and figures, aligned to the header strip. */}
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                          <div className="flex min-w-0 flex-1 basis-44 items-center gap-3">
+                            <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
+                              {srNo}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                              {r.name}
+                            </span>
+                          </div>
 
-                      <div className="flex items-end gap-5">
-                        <Field label="Committed">
-                          <span className="tnum block py-2 text-right text-sm text-ink-secondary">
+                          <span
+                            className={`${W.committed} tnum text-right text-sm text-ink-secondary`}
+                          >
+                            <Label>Committed</Label>
                             {num(r.committed)}
                           </span>
-                        </Field>
 
-                        <Field label={<>Today&rsquo;s manpower</>}>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            aria-label={`Manpower reported by ${r.name} under ${r.type}`}
-                            value={draft[r.id] ?? ""}
-                            onChange={(e) => update(r.id, e.target.value)}
-                            placeholder="—"
-                            className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
-                          />
-                        </Field>
+                          <span className={`${W.input} flex items-center justify-end gap-1.5`}>
+                            <Label>Today&rsquo;s</Label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              aria-label={`Manpower reported by ${r.name} under ${r.type}`}
+                              value={draft[r.id] ?? ""}
+                              onChange={(e) => update(r.id, e.target.value)}
+                              placeholder="—"
+                              className="tnum w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-accent focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-accent/30"
+                            />
+                          </span>
 
-                        <Field label="Variance">
                           <span
-                            className={`tnum block w-14 py-2 text-right text-sm font-medium ${
+                            className={`${W.variance} tnum text-right text-sm font-medium ${
                               value != null && value - r.committed < 0
                                 ? "text-[var(--critical)]"
                                 : "text-ink-secondary"
                             }`}
                           >
+                            <Label>Variance</Label>
                             {value == null ? "—" : signed(value - r.committed)}
                           </span>
-                        </Field>
 
-                        <div className="w-36 py-2">
-                          {value == null ? (
-                            <span className="text-xs text-ink-muted">Not entered</span>
-                          ) : (
-                            <StatusChip rate={rate} />
-                          )}
+                          <span className={`${W.status} flex justify-start`}>
+                            {value == null ? (
+                              <span className="whitespace-nowrap rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-muted">
+                                Not entered
+                              </span>
+                            ) : (
+                              <StatusChip rate={rate} />
+                            )}
+                          </span>
                         </div>
-                      </div>
-                    </div>
 
-                    {canEditRoster && (
-                      <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
-                        <DeleteButton
-                          label={`${r.name} from the roster`}
-                          onConfirm={() => {
-                            removeContractor(r.id);
-                            // Its login would otherwise point at nothing.
-                            pruneUsers(new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)));
-                          }}
-                        />
+
                       </div>
-                    )}
+
+                      {canEditRoster && (
+                        <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
+                          <DeleteButton
+                            label={`${r.name} from the roster`}
+                            onConfirm={() => {
+                              removeContractor(r.id);
+                              // Its login would otherwise point at nothing.
+                              pruneUsers(
+                                new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)),
+                              );
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -218,7 +238,7 @@ export default function EntryForm({
             setSaved(true);
           }}
           disabled={!dirty}
-          className="flex items-center gap-1.5 rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
         >
           <Check size={14} strokeWidth={2.6} aria-hidden />
           Save this day
@@ -250,15 +270,26 @@ export default function EntryForm({
   );
 }
 
-/** Micro-caps label above a value, so each card column stays identifiable. */
-function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+/**
+ * Column widths, shared by the header strip and every card so the labels at
+ * the top keep pointing at the right figures.
+ */
+const W = {
+  committed: "w-24",
+  input: "w-28",
+  variance: "w-20",
+  status: "w-40",
+} as const;
+
+/**
+ * Repeats the column name on narrow screens, where the header strip is
+ * hidden and a bare figure would be ambiguous.
+ */
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-        {label}
-      </span>
+    <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted lg:hidden">
       {children}
-    </div>
+    </span>
   );
 }
 

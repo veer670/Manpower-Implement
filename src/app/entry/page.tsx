@@ -85,7 +85,7 @@ export default function EntryPage() {
           value={date ?? ""}
           max={today ?? undefined}
           onChange={(e) => setPicked(e.target.value || null)}
-          className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
+          className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </label>
 
@@ -96,7 +96,7 @@ export default function EntryPage() {
           aria-expanded={adding}
           className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
             adding
-              ? "border-series-1 bg-surface-2 text-ink"
+              ? "border-accent bg-surface-2 text-ink"
               : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
           }`}
         >

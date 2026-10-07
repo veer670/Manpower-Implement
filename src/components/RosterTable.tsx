@@ -9,7 +9,6 @@ import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
 import TypePicker from "./TypePicker";
 import DeleteButton from "./DeleteButton";
-import { initialsOf } from "./Table";
 
 /**
  * The master list, in two levels: contractor types first, then the
@@ -72,30 +71,33 @@ export default function RosterTable() {
         All contractor types
       </button>
 
+      {/* The column label is stated once here, not on every card. */}
+      <div className="mb-2 hidden items-center gap-x-5 px-4 lg:flex">
+        <span className="flex-1 basis-44" />
+        <span className="w-28 text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+          Committed
+        </span>
+        <span className="w-11" />
+      </div>
+
       <ul className="space-y-2">
         {list.map((c, i) => (
           <li
             key={c.id}
-            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-series-1/35"
+            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
           >
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
-              <div className="flex min-w-0 flex-1 basis-56 items-center gap-3.5">
+              <div className="flex min-w-0 flex-1 basis-44 items-center gap-3">
                 <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
                   {i + 1}
-                </span>
-                <span
-                  aria-hidden
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-bold tracking-wide text-ink-secondary"
-                >
-                  {initialsOf(c.name)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                   {c.name}
                 </span>
               </div>
 
-              <div className="flex flex-col gap-0.5">
-                <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+              <div className="flex w-28 items-center justify-end gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted lg:hidden">
                   Committed
                 </span>
                 <input
@@ -104,7 +106,7 @@ export default function RosterTable() {
                   aria-label={`Committed headcount for ${c.name}`}
                   defaultValue={c.committed}
                   onBlur={(e) => editCommitted(c, e.target.value.trim())}
-                  className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
+                  className="tnum w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink hover:border-ink-muted/50 focus:border-accent focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-accent/30"
                 />
               </div>
             </div>
@@ -210,7 +212,7 @@ function AddContractor({ types, fixedType }: { types: string[]; fixedType?: stri
         </label>
         <button
           onClick={add}
-          className="flex items-center gap-1.5 rounded-lg bg-series-1 px-3.5 py-2 text-xs font-semibold text-white"
+          className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white"
         >
           <Plus size={14} strokeWidth={2.6} aria-hidden />
           Add
@@ -223,4 +225,4 @@ function AddContractor({ types, fixedType }: { types: string[]; fixedType?: stri
 
 const field =
   "rounded-md border border-hairline bg-surface-1 px-2.5 py-1.5 text-xs text-ink " +
-  "placeholder:text-ink-muted focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1";
+  "placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";

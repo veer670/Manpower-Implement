@@ -53,7 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-full">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-surface-1 p-4 lg:flex">
         <div className="flex items-center gap-2 px-1 py-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-series-1 text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
             <HardHat size={17} strokeWidth={2.2} aria-hidden />
           </span>
           <div className="leading-tight">

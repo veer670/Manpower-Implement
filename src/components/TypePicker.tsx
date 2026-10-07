@@ -90,7 +90,7 @@ export default function TypePicker({
         return (
           <li
             key={type}
-            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-all hover:border-series-1/35 hover:bg-surface-2"
+            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-all hover:border-accent/45 hover:bg-surface-2"
           >
             <button
               onClick={() => onSelect(type)}

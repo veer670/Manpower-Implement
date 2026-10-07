@@ -38,7 +38,7 @@ export default function LoginPage() {
         </p>
         <Link
           href="/entry"
-          className="mt-4 inline-block rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white"
+          className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
         >
           Enter my manpower
         </Link>
@@ -49,7 +49,7 @@ export default function LoginPage() {
   return (
     <div className="mx-auto max-w-[380px] py-16">
       <div className="text-center">
-        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-series-1 text-white">
+        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-white">
           <HardHat size={22} strokeWidth={2.1} aria-hidden />
         </span>
         <h1 className="mt-4 text-xl font-semibold tracking-tight text-ink">Contractor sign in</h1>
@@ -89,7 +89,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={busy}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-series-1 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
         >
           <LogIn size={14} strokeWidth={2.5} aria-hidden />
           {busy ? "Checking…" : "Sign in"}
@@ -108,4 +108,4 @@ export default function LoginPage() {
 
 const field =
   "rounded-md border border-hairline bg-surface-2 px-3 py-2 text-sm text-ink " +
-  "focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1";
+  "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";

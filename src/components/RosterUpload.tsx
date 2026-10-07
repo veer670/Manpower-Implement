@@ -96,7 +96,7 @@ export default function RosterUpload() {
           if (file) void handleFile(file);
         }}
         className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-          dragging ? "border-series-1 bg-surface-2" : "border-hairline"
+          dragging ? "border-accent bg-surface-2" : "border-hairline"
         }`}
       >
         <FileSpreadsheet
@@ -116,7 +116,7 @@ export default function RosterUpload() {
           <button
             onClick={() => inputRef.current?.click()}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-lg bg-series-1 px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             <Upload size={14} strokeWidth={2.4} aria-hidden />
             {busy ? "Reading…" : "Choose file"}

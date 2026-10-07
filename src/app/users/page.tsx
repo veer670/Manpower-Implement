@@ -19,7 +19,7 @@ export default function UsersPage() {
         </p>
         <Link
           href="/entry"
-          className="mt-5 inline-block rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white"
+          className="mt-5 inline-block rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
         >
           Back to my manpower
         </Link>

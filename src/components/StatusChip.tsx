@@ -8,7 +8,7 @@ const ICONS: Record<Severity, typeof CheckCircle2> = {
   critical: OctagonAlert,
 };
 
-const COLORS: Record<Severity, string> = {
+export const SEVERITY_COLOR: Record<Severity, string> = {
   good: "var(--good)",
   warning: "var(--warning)",
   serious: "var(--serious)",
@@ -16,15 +16,21 @@ const COLORS: Record<Severity, string> = {
 };
 
 /**
- * Status is icon + label + colour, never colour alone — two of the three
- * light-mode status hues sit below 3:1 against the surface by design.
+ * Status as a tinted pill. Icon + label carry the meaning and the tint only
+ * reinforces it — two of the four status hues sit below 3:1 on the light
+ * surface by design, so colour alone would not be readable.
  */
 export default function StatusChip({ rate }: { rate: number | null }) {
   const severity = severityForFillRate(rate);
   const Icon = ICONS[severity];
+  const color = SEVERITY_COLOR[severity];
+
   return (
-    <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-ink-secondary">
-      <Icon size={14} strokeWidth={2.2} style={{ color: COLORS[severity] }} aria-hidden />
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium text-ink-secondary"
+      style={{ background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+    >
+      <Icon size={13} strokeWidth={2.4} style={{ color }} aria-hidden />
       {severityLabel[severity]}
     </span>
   );

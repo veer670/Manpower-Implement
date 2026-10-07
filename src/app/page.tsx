@@ -213,7 +213,7 @@ function Empty({ message, entry = false }: { message: string; entry?: boolean })
       <div className="mt-5 flex items-center justify-center gap-2">
         <Link
           href={entry ? "/entry" : "/roster"}
-          className="rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white"
+          className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
         >
           {entry ? "Enter today's manpower" : "Set up the roster"}
         </Link>

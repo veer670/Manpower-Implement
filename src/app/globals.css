@@ -9,16 +9,21 @@
 :root {
   color-scheme: light;
 
-  /* surfaces & chrome.
-     The page plane is deliberately a step below the card surface so cards
-     lift off it. --surface-1 is also the chart surface the categorical
-     palette was validated against, so it stays put. */
-  --plane:          #f0efec;
-  --surface-1:      #fcfcfb;
-  --surface-2:      #f4f4f1;
-  --border:         rgba(11, 11, 11, 0.10);
-  --gridline:       #e1e0d9;
-  --axis:           #c3c2b7;
+  /* surfaces & chrome — a warm cream plane with white cards lifting off it.
+     --surface-1 is also the chart surface; the categorical palette below was
+     re-validated against white when this changed. */
+  --plane:          #f7f3ec;
+  --surface-1:      #ffffff;
+  --surface-2:      #f2ece1;
+  --border:         rgba(60, 46, 25, 0.12);
+  --gridline:       #e6e0d4;
+  --axis:           #c9c0ad;
+
+  /* UI accent — bronze. Deliberately NOT a chart series colour: chrome and
+     data must not share a hue, or a button starts looking like a series.
+     White on --accent is 5.00:1; --accent-text on the plane is 5.39:1. */
+  --accent:         #8a6a3a;
+  --accent-text:    #7d5e33;
 
   /* ink */
   --text-primary:   #0b0b0b;
@@ -45,12 +50,14 @@
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --plane:          #0d0d0d;
+    --plane:          #0d0d0c;
     --surface-1:      #1a1a19;
-    --surface-2:      #222221;
+    --surface-2:      #24231f;
     --border:         rgba(255, 255, 255, 0.10);
     --gridline:       #2c2c2a;
     --axis:           #383835;
+    --accent:         #8a6a3a;
+    --accent-text:    #c9a06a;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
     --text-muted:     #898781;
@@ -65,12 +72,14 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --plane:          #0d0d0d;
+  --plane:          #0d0d0c;
   --surface-1:      #1a1a19;
-  --surface-2:      #222221;
+  --surface-2:      #24231f;
   --border:         rgba(255, 255, 255, 0.10);
   --gridline:       #2c2c2a;
   --axis:           #383835;
+  --accent:         #8a6a3a;
+  --accent-text:    #c9a06a;
   --text-primary:   #ffffff;
   --text-secondary: #c3c2b7;
   --text-muted:     #898781;
@@ -92,6 +101,8 @@
   --color-ink:            var(--text-primary);
   --color-ink-secondary:  var(--text-secondary);
   --color-ink-muted:      var(--text-muted);
+  --color-accent:         var(--accent);
+  --color-accent-text:    var(--accent-text);
   --color-series-1:       var(--series-1);
   --color-series-2:       var(--series-2);
   --color-good:           var(--good);

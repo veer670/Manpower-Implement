@@ -150,7 +150,7 @@ export default function UserCreate() {
           <button
             onClick={create}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-lg bg-series-1 px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             <UserPlus size={14} strokeWidth={2.5} aria-hidden />
             {busy ? "Creating…" : "Create login"}
@@ -326,4 +326,4 @@ function Th({
 
 const field =
   "rounded-md border border-hairline bg-surface-1 px-2.5 py-1.5 text-xs text-ink " +
-  "placeholder:text-ink-muted focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1";
+  "placeholder:text-ink-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent";
