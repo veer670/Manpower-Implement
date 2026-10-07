@@ -47,9 +47,13 @@ export default function EntryPage() {
     [allRows],
   );
 
+  // Deleting the last contractor of a type leaves `type` pointing at one that
+  // no longer exists; derive the live value rather than chasing it in an effect.
+  const activeType = type && types.includes(type) ? type : null;
+
   const rows = useMemo(
-    () => (type ? allRows.filter((r) => r.type === type) : allRows),
-    [allRows, type],
+    () => (activeType ? allRows.filter((r) => r.type === activeType) : allRows),
+    [allRows, activeType],
   );
 
   const contractor = session ? data.contractors.find((c) => c.id === session.contractorId) : null;
@@ -69,7 +73,7 @@ export default function EntryPage() {
 
   // A contractor has exactly one row — a type picker in front of it would be
   // a door with nothing behind it.
-  const showPicker = !session && type === null;
+  const showPicker = !session && activeType === null;
 
   const entered = allRows.filter((r) => r.actual != null).length;
 
@@ -107,8 +111,8 @@ export default function EntryPage() {
   const quickAdd =
     !session && adding ? (
       <QuickAdd
-        key={type ?? "all"}
-        presetType={type ?? undefined}
+        key={activeType ?? "all"}
+        presetType={activeType ?? undefined}
         onClose={() => setAdding(false)}
       />
     ) : null;
@@ -154,7 +158,7 @@ export default function EntryPage() {
         </Card>
       ) : (
         <Card
-          title={type ?? (contractor?.type || "")}
+          title={activeType ?? (contractor?.type || "")}
           subtitle={
             date
               ? `${longDate(date)}${
@@ -179,10 +183,11 @@ export default function EntryPage() {
             // Keyed by date and type so switching either re-seeds the draft
             // from storage rather than carrying a stale one across.
             <EntryForm
-              key={`${date}:${type ?? "mine"}`}
+              key={`${date}:${activeType ?? "mine"}`}
               rows={rows}
               date={date}
               showTypeColumn={false}
+              canEditRoster={!session}
             />
           ) : (
             <p className="py-8 text-center text-sm text-ink-muted">Loading today&rsquo;s date…</p>

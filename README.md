@@ -47,10 +47,12 @@ not a record of its own: it exists only as a field on a contractor, so a type
 with nobody under it would not survive a reload. Opened inside a type, the form
 fills that type in for you.
 
-Each type row carries a **delete** control, on both Daily entry and Roster.
-Deleting a type removes every contractor under it and all of their saved
-manpower, so it asks first and names the count. Individual contractors are
-deleted from inside a type on the Roster.
+Contractor types and contractors alike are numbered **Sr. No.** in the first
+column, and each row carries a **delete** control on both Daily entry and
+Roster. Deleting takes the saved manpower with it, so both ask first —
+a type's prompt names how many contractors go with it. Removing the last
+contractor of a type drops you back to the type list rather than leaving you
+in an empty one.
 
 ## Contractor logins
 

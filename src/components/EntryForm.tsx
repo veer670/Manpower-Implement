@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
-import { saveDay } from "@/lib/dataset";
+import { removeContractor, saveDay } from "@/lib/dataset";
+import { pruneUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
+import DeleteButton from "./DeleteButton";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -19,9 +21,12 @@ export default function EntryForm({
   rows,
   date,
   showTypeColumn = true,
+  canEditRoster = false,
 }: {
   rows: DayRow[];
   date: string;
+  /** Off for a signed-in contractor — they may report, not reshape the roster. */
+  canEditRoster?: boolean;
   /** Off when the table is already filtered to a single type — the column
    *  would then repeat the heading on every row. */
   showTypeColumn?: boolean;
@@ -105,25 +110,33 @@ export default function EntryForm({
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className={`w-full text-sm ${showTypeColumn ? "min-w-[680px]" : "min-w-[560px]"}`}>
+        <table className={`w-full text-sm ${showTypeColumn ? "min-w-[760px]" : "min-w-[640px]"}`}>
           <thead>
             <tr className="border-b border-hairline text-left">
+              <Th>Sr. No.</Th>
               {showTypeColumn && <Th>Contractor type</Th>}
               <Th>Contractor name</Th>
               <Th align="right">Committed</Th>
               <Th align="right">Today&rsquo;s manpower</Th>
               <Th align="right">Variance</Th>
               <Th>Status</Th>
+              {canEditRoster && (
+                <Th align="right">
+                  <span className="sr-only">Actions</span>
+                </Th>
+              )}
             </tr>
           </thead>
           <tbody>
             {blocks.map(([type, block]) =>
               block.map((r, i) => {
+                const srNo = rows.indexOf(r) + 1;
                 const value = parsed.get(r.id) ?? null;
                 const rate =
                   value == null ? null : fillRate({ committed: r.committed, actual: value });
                 return (
                   <tr key={r.id} className="border-b border-hairline/60">
+                    <td className="tnum py-1.5 pr-4 text-ink-muted">{srNo}</td>
                     {showTypeColumn && (
                       <td className="py-1.5 pr-4">
                         {/* Named once per block, as it is on the register. */}
@@ -161,6 +174,20 @@ export default function EntryForm({
                         <StatusChip rate={rate} />
                       )}
                     </td>
+                    {canEditRoster && (
+                      <td className="py-1.5 pl-4 text-right">
+                        <DeleteButton
+                          label={`${r.name} from the roster`}
+                          onConfirm={() => {
+                            removeContractor(r.id);
+                            // Its login would otherwise point at nothing.
+                            pruneUsers(
+                              new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)),
+                            );
+                          }}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               }),
@@ -168,7 +195,7 @@ export default function EntryForm({
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-hairline font-semibold">
-              <td className="py-2.5 pr-4 text-ink" colSpan={showTypeColumn ? 2 : 1}>
+              <td className="py-2.5 pr-4 text-ink" colSpan={showTypeColumn ? 3 : 2}>
                 Total — {num(totals.filled)} of {num(rows.length)} entered
               </td>
               <td className="tnum py-2.5 pr-4 text-right text-ink">{num(totals.committed)}</td>
@@ -179,6 +206,7 @@ export default function EntryForm({
               <td className="py-2.5 text-xs font-medium text-ink-secondary">
                 {pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
               </td>
+              {canEditRoster && <td />}
             </tr>
           </tfoot>
         </table>

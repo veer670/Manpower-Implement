@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { removeContractor, removeType, upsertContractor } from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
 import TypePicker from "./TypePicker";
+import DeleteButton from "./DeleteButton";
 
 /**
  * The master list, in two levels: contractor types first, then the
@@ -71,9 +72,12 @@ export default function RosterTable() {
       </button>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[460px] text-sm">
+        <table className="w-full min-w-[520px] text-sm">
           <thead>
             <tr className="border-b border-hairline text-left">
+              <th scope="col" className="pb-2 pr-4 text-xs font-medium text-ink-secondary">
+                Sr. No.
+              </th>
               <th scope="col" className="pb-2 pr-4 text-xs font-medium text-ink-secondary">
                 Contractor name
               </th>
@@ -89,8 +93,9 @@ export default function RosterTable() {
             </tr>
           </thead>
           <tbody>
-            {list.map((c) => (
+            {list.map((c, i) => (
               <tr key={c.id} className="border-b border-hairline/60">
+                <td className="tnum py-1.5 pr-4 text-ink-muted">{i + 1}</td>
                 <td className="py-1.5 pr-4 font-medium text-ink">{c.name}</td>
                 <td className="py-1.5 pr-4 text-right">
                   <input
@@ -102,22 +107,18 @@ export default function RosterTable() {
                     className="tnum w-20 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-right text-ink focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
                   />
                 </td>
-                <td className="py-1.5 text-right">
-                  <button
-                    onClick={() => remove(c)}
-                    aria-label={`Remove ${c.name} from the roster`}
-                    title={`Remove ${c.name}`}
-                    className="rounded-md p-1.5 text-ink-muted hover:bg-surface-2 hover:text-[var(--critical)]"
-                  >
-                    <Trash2 size={14} strokeWidth={2.2} aria-hidden />
-                  </button>
+                <td className="py-1.5 pl-4 text-right">
+                  <DeleteButton
+                    label={`${c.name} from the roster`}
+                    onConfirm={() => remove(c)}
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-hairline font-semibold">
-              <td className="py-2.5 pr-4 text-ink">
+              <td className="py-2.5 pr-4 text-ink" colSpan={2}>
                 {num(list.length)} contractor{list.length === 1 ? "" : "s"}
               </td>
               <td className="tnum py-2.5 pr-4 text-right text-ink">

@@ -32,7 +32,9 @@ export default function TypePicker({
 
   return (
     <ul className="divide-y divide-hairline/60 border-y border-hairline/60">
-      {types.map((type) => {
+      {types.map((type, i) => {
+        const srNo = i + 1;
+
         if (confirming === type) {
           const count = countFor?.(type) ?? 0;
           return (
@@ -72,9 +74,10 @@ export default function TypePicker({
           <li key={type} className="group flex items-center transition-colors hover:bg-surface-2">
             <button
               onClick={() => onSelect(type)}
-              className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-3.5 text-left"
+              className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3.5 text-left"
             >
-              <span className="truncate text-sm font-semibold text-ink">{type}</span>
+              <span className="tnum w-6 shrink-0 text-xs text-ink-muted">{srNo}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{type}</span>
               <ChevronRight
                 size={16}
                 strokeWidth={2.2}
