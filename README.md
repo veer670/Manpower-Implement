@@ -40,6 +40,13 @@ one per row, rather than the whole roster at once. Clicking a type opens its
 contractors with the columns that matter there: contractor name, committed,
 today's manpower, variance, status.
 
+**Add type** and **Add contractor**, under the date on Daily entry, add to the
+roster without leaving the screen. A contractor type is not a record of its own
+— it exists only as a field on a contractor — so creating a type asks for its
+first contractor in the same breath; a type with nobody under it would not
+survive a reload. Opened inside a type, Add contractor fills that type in for
+you.
+
 ## Contractor logins
 
 **User create** issues one login per contractor. The user ID is suggested from

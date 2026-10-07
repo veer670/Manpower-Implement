@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FolderPlus, UserPlus } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
 import TypePicker from "@/components/TypePicker";
+import QuickAdd, { type QuickAddMode } from "@/components/QuickAdd";
 import { longDate, num } from "@/lib/format";
 import { allDates, rowsForDate } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
@@ -21,6 +22,7 @@ export default function EntryPage() {
   );
   const [picked, setPicked] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
+  const [adding, setAdding] = useState<QuickAddMode | null>(null);
 
   const date = picked ?? today;
   const dates = useMemo(() => allDates(data.entries), [data.entries]);
@@ -70,18 +72,60 @@ export default function EntryPage() {
 
   const entered = allRows.filter((r) => r.actual != null).length;
 
-  const dateControl = (
-    <label className="flex items-center gap-2">
-      <span className="text-xs font-medium text-ink-muted">Date</span>
-      <input
-        type="date"
-        value={date ?? ""}
-        max={today ?? undefined}
-        onChange={(e) => setPicked(e.target.value || null)}
-        className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
-      />
-    </label>
+  const headerControls = (
+    <div className="flex flex-col items-end gap-2">
+      <label className="flex items-center gap-2">
+        <span className="text-xs font-medium text-ink-muted">Date</span>
+        <input
+          type="date"
+          value={date ?? ""}
+          max={today ?? undefined}
+          onChange={(e) => setPicked(e.target.value || null)}
+          className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1.5 text-xs text-ink focus:border-series-1 focus:outline-none focus:ring-1 focus:ring-series-1"
+        />
+      </label>
+
+      {/* A signed-in contractor has one row and no business editing the roster. */}
+      {!session && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAdding(adding === "type" ? null : "type")}
+            aria-expanded={adding === "type"}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              adding === "type"
+                ? "border-series-1 bg-surface-2 text-ink"
+                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+            }`}
+          >
+            <FolderPlus size={13} strokeWidth={2.4} aria-hidden />
+            Add type
+          </button>
+          <button
+            onClick={() => setAdding(adding === "contractor" ? null : "contractor")}
+            aria-expanded={adding === "contractor"}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              adding === "contractor"
+                ? "border-series-1 bg-surface-2 text-ink"
+                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+            }`}
+          >
+            <UserPlus size={13} strokeWidth={2.4} aria-hidden />
+            Add contractor
+          </button>
+        </div>
+      )}
+    </div>
   );
+
+  const quickAdd =
+    !session && adding ? (
+      <QuickAdd
+        key={`${adding}:${type ?? "all"}`}
+        mode={adding}
+        presetType={adding === "contractor" && type ? type : undefined}
+        onClose={() => setAdding(null)}
+      />
+    ) : null;
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
@@ -111,8 +155,9 @@ export default function EntryPage() {
               ? "No contractors on the roster yet."
               : `${num(entered)} of ${num(allRows.length)} contractors entered for this day.`
           }
-          actions={dateControl}
+          actions={headerControls}
         >
+          {quickAdd}
           <TypePicker
             types={types}
             onSelect={setType}
@@ -129,8 +174,9 @@ export default function EntryPage() {
                 }`
               : undefined
           }
-          actions={dateControl}
+          actions={headerControls}
         >
+          {quickAdd}
           {!session && (
             <button
               onClick={() => setType(null)}
