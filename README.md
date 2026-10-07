@@ -26,14 +26,21 @@ read-only, with one editable box per contractor.
 | Screen | What it is for |
 |---|---|
 | **Dashboard** | Today's manpower against commitment, fill rate, shortfall, the day-by-day trend, and breakdowns by contractor type and by contractor |
-| **Daily entry** | The register, pre-filled. Type the day's figures, see variance and status update live, save |
-| **Roster** | Add, edit and remove contractors; import the whole list from a sheet |
+| **Daily entry** | Pick a contractor type, then fill in that type's figures — variance and status update live |
+| **Roster** | Pick a contractor type, then add, edit and remove its contractors; import the whole list from a sheet |
 | **User create** | Give a contractor a user ID and password so they can enter their own figures |
 
 Fill rate is banded so shortfalls surface without reading numbers:
 **≥ 95 %** on commitment · **≥ 85 %** slightly short · **≥ 70 %** short ·
 **below 70 %** critically short. Status is always icon + label + colour, never
 colour alone. Over-supply counts as met, not as a problem.
+
+Daily entry and Roster both open on a **list of contractor types** rather than
+the whole roster at once. Each entry card carries that type's progress for the
+day — heads reported, fill rate, and how many of its contractors are still
+blank — so you can see what is outstanding before opening anything. Clicking a
+type gives the familiar columns: contractor name, committed, today's manpower,
+variance, status.
 
 ## Contractor logins
 
@@ -42,7 +49,7 @@ the contractor name (`Prajapati` → `prajapati`) and the password is generated
 unless you type one.
 
 A contractor signs in at `/login` and gets a single screen — **My manpower** —
-showing only their own row. They cannot see the dashboard, the roster, other
+showing only their own row, with no type list in front of it. They cannot see the dashboard, the roster, other
 contractors' figures, or the login list, by the nav or by typing the URL.
 
 The password is shown **once**, at the moment it is issued, and is stored as a

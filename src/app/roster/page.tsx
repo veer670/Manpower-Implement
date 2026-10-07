@@ -24,7 +24,10 @@ function Roster() {
         </p>
       </div>
 
-      <Card title="Roster" subtitle="Committed headcount is editable in place.">
+      <Card
+        title="Roster"
+        subtitle="Pick a contractor type to see its contractors. Committed headcount is editable in place."
+      >
         <RosterTable />
       </Card>
 

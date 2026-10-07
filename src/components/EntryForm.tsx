@@ -15,7 +15,17 @@ import StatusChip from "./StatusChip";
  * Mount this with `key={date}` so switching day re-seeds the draft — no effect
  * needed to sync state to props.
  */
-export default function EntryForm({ rows, date }: { rows: DayRow[]; date: string }) {
+export default function EntryForm({
+  rows,
+  date,
+  showTypeColumn = true,
+}: {
+  rows: DayRow[];
+  date: string;
+  /** Off when the table is already filtered to a single type — the column
+   *  would then repeat the heading on every row. */
+  showTypeColumn?: boolean;
+}) {
   const seed = () =>
     Object.fromEntries(rows.map((r) => [r.id, r.actual == null ? "" : String(r.actual)]));
 
@@ -95,10 +105,10 @@ export default function EntryForm({ rows, date }: { rows: DayRow[]; date: string
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] text-sm">
+        <table className={`w-full text-sm ${showTypeColumn ? "min-w-[680px]" : "min-w-[560px]"}`}>
           <thead>
             <tr className="border-b border-hairline text-left">
-              <Th>Contractor type</Th>
+              {showTypeColumn && <Th>Contractor type</Th>}
               <Th>Contractor name</Th>
               <Th align="right">Committed</Th>
               <Th align="right">Today&rsquo;s manpower</Th>
@@ -114,10 +124,12 @@ export default function EntryForm({ rows, date }: { rows: DayRow[]; date: string
                   value == null ? null : fillRate({ committed: r.committed, actual: value });
                 return (
                   <tr key={r.id} className="border-b border-hairline/60">
-                    <td className="py-1.5 pr-4">
-                      {/* Named once per block, as it is on the register. */}
-                      {i === 0 ? <span className="font-medium text-ink">{type}</span> : null}
-                    </td>
+                    {showTypeColumn && (
+                      <td className="py-1.5 pr-4">
+                        {/* Named once per block, as it is on the register. */}
+                        {i === 0 ? <span className="font-medium text-ink">{type}</span> : null}
+                      </td>
+                    )}
                     <td className="py-1.5 pr-4 font-medium text-ink">{r.name}</td>
                     <td className="tnum py-1.5 pr-4 text-right text-ink-secondary">
                       {num(r.committed)}
@@ -156,7 +168,7 @@ export default function EntryForm({ rows, date }: { rows: DayRow[]; date: string
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-hairline font-semibold">
-              <td className="py-2.5 pr-4 text-ink" colSpan={2}>
+              <td className="py-2.5 pr-4 text-ink" colSpan={showTypeColumn ? 2 : 1}>
                 Total — {num(totals.filled)} of {num(rows.length)} entered
               </td>
               <td className="tnum py-2.5 pr-4 text-right text-ink">{num(totals.committed)}</td>
