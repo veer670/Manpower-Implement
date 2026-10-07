@@ -14,7 +14,7 @@ import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
-import EditableName from "./EditableName";
+import EditableName, { EditButton } from "./EditableName";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -42,6 +42,7 @@ export default function EntryForm({
 
   const [draft, setDraft] = useState<Record<string, string>>(seed);
   const [saved, setSaved] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const parsed = useMemo(() => {
     const out = new Map<string, number | null>();
@@ -120,7 +121,7 @@ export default function EntryForm({
           Variance
         </span>
         <span className={W.status} />
-        {canEditRoster && <span className="w-11" />}
+        {canEditRoster && <span className="w-[66px]" />}
       </div>
 
       <div className="space-y-5">
@@ -162,8 +163,11 @@ export default function EntryForm({
                             )}
                             {canEditRoster ? (
                               <EditableName
+                                key={`${r.id}:${editingId === r.id}`}
                                 value={r.name}
                                 label={r.name}
+                                editing={editingId === r.id}
+                                onCancel={() => setEditingId(null)}
                                 onRename={(to) => {
                                   const map = renameContractor(r.id, to);
                                   if (map.size === 0) return false;
@@ -224,7 +228,8 @@ export default function EntryForm({
                       </div>
 
                       {canEditRoster && (
-                        <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
+                        <div className="flex w-[66px] shrink-0 items-center justify-center gap-0.5 border-l border-hairline/60">
+                          <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
                           <DeleteButton
                             label={`${r.name} from the roster`}
                             onConfirm={() => {

@@ -5,7 +5,7 @@ import { ChevronRight, Trash2, TriangleAlert } from "lucide-react";
 import { num } from "@/lib/format";
 import type { OrderedName } from "@/lib/metrics";
 import SrNoInput from "./SrNoInput";
-import EditableName from "./EditableName";
+import EditableName, { EditButton } from "./EditableName";
 
 /**
  * One level of the roster drill-down: categories, or the types inside one.
@@ -36,6 +36,7 @@ export default function ListPicker({
   emptyMessage: string;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   if (items.length === 0) {
     return (
@@ -105,9 +106,17 @@ export default function ListPicker({
         return (
           <li
             key={name}
-            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
+            onClick={() => {
+              // Clicking anywhere on the card opens it — except while its own
+              // name is being edited, where a stray click would discard the edit.
+              if (editing !== name) onSelect(name);
+            }}
+            className="group flex cursor-pointer items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45 hover:bg-surface-2/60"
           >
-            <div className="flex shrink-0 items-center pl-3">
+            <div
+              className="flex shrink-0 items-center pl-3"
+              onClick={(e) => e.stopPropagation()}
+            >
               <SrNoInput
                 value={item.srNo}
                 // Falls back to position when nothing has been set, so the
@@ -121,8 +130,11 @@ export default function ListPicker({
             <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3">
               {onRename ? (
                 <EditableName
+                  key={`${name}:${editing === name}`}
                   value={name}
                   label={name}
+                  editing={editing === name}
+                  onCancel={() => setEditing(null)}
                   onRename={(to) => onRename(name, to)}
                 />
               ) : (
@@ -131,7 +143,10 @@ export default function ListPicker({
                 </span>
               )}
               <button
-                onClick={() => onSelect(name)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(name);
+                }}
                 aria-label={`Open ${name}`}
                 title={`Open ${name}`}
                 className="shrink-0 rounded-md p-1.5 text-ink-muted transition-transform hover:bg-surface-2 group-hover:translate-x-0.5 group-hover:text-ink"
@@ -140,15 +155,23 @@ export default function ListPicker({
               </button>
             </div>
 
-            {onDelete && (
-              <button
-                onClick={() => setConfirming(name)}
-                aria-label={`Delete ${name}`}
-                title={`Delete ${name}`}
-                className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 text-ink-muted transition-colors hover:bg-surface-2 hover:text-[var(--critical)]"
+            {(onRename || onDelete) && (
+              <div
+                className="flex w-[66px] shrink-0 items-center justify-center gap-0.5 border-l border-hairline/60"
+                onClick={(e) => e.stopPropagation()}
               >
-                <Trash2 size={14} strokeWidth={2.2} aria-hidden />
-              </button>
+                {onRename && <EditButton label={name} onClick={() => setEditing(name)} />}
+                {onDelete && (
+                  <button
+                    onClick={() => setConfirming(name)}
+                    aria-label={`Delete ${name}`}
+                    title={`Delete ${name}`}
+                    className="rounded-md p-1.5 text-ink-muted hover:bg-surface-2 hover:text-[var(--critical)]"
+                  >
+                    <Trash2 size={14} strokeWidth={2.2} aria-hidden />
+                  </button>
+                )}
+              </div>
             )}
           </li>
         );

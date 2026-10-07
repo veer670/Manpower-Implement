@@ -51,8 +51,9 @@ form always asks for a contractor, whatever level you are on.
 it does not renumber the rows around it. Two rows may share a number and ties
 break on name, so setting one row never silently rewrites another.
 
-**Names are editable at every level too** — the pencil beside a category,
-contractor type or contractor. A contractor's id is derived from all three
+**Names are editable at every level too** — the pencil in each card's action
+strip, beside delete. Clicking anywhere else on a category or type card opens
+it. A contractor's id is derived from all three
 names, so renaming any of them mints new ids; saved manpower and contractor
 logins are migrated with the rename. A rename onto a name already in use is
 refused rather than merging two rows into one.

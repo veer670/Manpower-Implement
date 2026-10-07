@@ -23,7 +23,7 @@ import type { Contractor } from "@/lib/types";
 import ListPicker from "./ListPicker";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
-import EditableName from "./EditableName";
+import EditableName, { EditButton } from "./EditableName";
 import QuickAdd from "./QuickAdd";
 
 /**
@@ -45,6 +45,7 @@ export default function RosterTable() {
   const [category, setCategory] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const categories = categoriesOf(data);
   const liveCategory = category && categories.some((c) => c.name === category) ? category : null;
@@ -182,7 +183,7 @@ export default function RosterTable() {
         <span className="w-28 text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
           Committed
         </span>
-        <span className="w-11" />
+        <span className="w-[66px]" />
       </div>
 
       <ul className="space-y-2">
@@ -200,8 +201,11 @@ export default function RosterTable() {
                   onChange={(n) => setContractorSrNo(c.id, n)}
                 />
                 <EditableName
+                  key={`${c.id}:${editingId === c.id}`}
                   value={c.name}
                   label={c.name}
+                  editing={editingId === c.id}
+                  onCancel={() => setEditingId(null)}
                   onRename={(to) => {
                     const map = renameContractor(c.id, to);
                     if (map.size === 0) return false;
@@ -226,7 +230,8 @@ export default function RosterTable() {
               </div>
             </div>
 
-            <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
+            <div className="flex w-[66px] shrink-0 items-center justify-center gap-0.5 border-l border-hairline/60">
+              <EditButton label={c.name} onClick={() => setEditingId(c.id)} />
               <DeleteButton label={`${c.name} from the roster`} onConfirm={() => remove(c)} />
             </div>
           </li>
