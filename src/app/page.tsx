@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import AdminOnly from "@/components/AdminOnly";
 import Card from "@/components/Card";
 import FilterBar from "@/components/FilterBar";
 import GroupTable from "@/components/GroupTable";
@@ -26,6 +27,14 @@ import {
 import { useStore } from "@/lib/store";
 
 export default function DashboardPage() {
+  return (
+    <AdminOnly>
+      <Dashboard />
+    </AdminOnly>
+  );
+}
+
+function Dashboard() {
   const { data, filters } = useStore();
 
   const view = useMemo(() => {

@@ -2,20 +2,52 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, HardHat, LayoutDashboard, Users } from "lucide-react";
+import {
+  ClipboardList,
+  HardHat,
+  KeyRound,
+  LayoutDashboard,
+  LogIn,
+  LogOut,
+  UserCog,
+  Users,
+} from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import * as auth from "@/lib/auth";
+import { useSession } from "@/lib/useAuth";
 import { useStore } from "@/lib/store";
 import { num } from "@/lib/format";
 
-const NAV = [
+const ADMIN_NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/entry", label: "Daily entry", Icon: ClipboardList },
   { href: "/roster", label: "Roster", Icon: Users },
+  { href: "/users", label: "User create", Icon: UserCog },
 ];
+
+const CONTRACTOR_NAV = [{ href: "/entry", label: "My manpower", Icon: ClipboardList }];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data } = useStore();
+  const session = useSession();
+
+  const nav = session ? CONTRACTOR_NAV : ADMIN_NAV;
+  const contractor = session
+    ? data.contractors.find((c) => c.id === session.contractorId)
+    : undefined;
+
+  // The sign-in page is its own thing — no shell chrome around it.
+  if (pathname === "/login") {
+    return (
+      <div className="min-h-full">
+        <div className="flex justify-end p-4">
+          <ThemeToggle />
+        </div>
+        <main>{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-full">
@@ -31,7 +63,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="mt-6 flex flex-col gap-0.5">
-          {NAV.map(({ href, label, Icon }) => {
+          {nav.map(({ href, label, Icon }) => {
             const active = pathname === href;
             return (
               <Link
@@ -51,21 +83,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-auto rounded-lg border border-hairline bg-surface-2 p-3">
-          <p className="text-[11px] font-medium text-ink-muted">Roster</p>
-          <p className="mt-1 truncate text-xs font-semibold text-ink" title={data.source}>
-            {data.source}
-          </p>
-          <p className="mt-0.5 text-[11px] text-ink-secondary">
-            {num(data.contractors.length)} contractors
-          </p>
+        <div className="mt-auto space-y-2">
+          {session ? (
+            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+              <p className="text-[11px] font-medium text-ink-muted">Signed in</p>
+              <p className="mt-1 truncate text-xs font-semibold text-ink">
+                {contractor?.name ?? session.username}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-ink-secondary">
+                {contractor?.type ?? session.username}
+              </p>
+              <button
+                onClick={() => auth.signOut()}
+                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-2 py-1.5 text-xs font-semibold text-ink-secondary hover:text-ink"
+              >
+                <LogOut size={13} strokeWidth={2.3} aria-hidden />
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
+                <p className="text-[11px] font-medium text-ink-muted">Roster</p>
+                <p className="mt-1 truncate text-xs font-semibold text-ink" title={data.source}>
+                  {data.source}
+                </p>
+                <p className="mt-0.5 text-[11px] text-ink-secondary">
+                  {num(data.contractors.length)} contractors
+                </p>
+              </div>
+              <Link
+                href="/login"
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-2 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
+              >
+                <LogIn size={13} strokeWidth={2.3} aria-hidden />
+                Contractor sign in
+              </Link>
+            </>
+          )}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-hairline bg-plane/90 px-5 py-3 backdrop-blur">
           <nav className="flex items-center gap-1 lg:hidden">
-            {NAV.map(({ href, label, Icon }) => {
+            {nav.map(({ href, label, Icon }) => {
               const active = pathname === href;
               return (
                 <Link
@@ -82,6 +144,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            {session ? (
+              <button
+                onClick={() => auth.signOut()}
+                aria-label="Sign out"
+                title="Sign out"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted"
+              >
+                <LogOut size={16} strokeWidth={2} aria-hidden />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                aria-label="Contractor sign in"
+                title="Contractor sign in"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted"
+              >
+                <KeyRound size={16} strokeWidth={2} aria-hidden />
+              </Link>
+            )}
           </nav>
           <div className="hidden lg:block" />
           <ThemeToggle />

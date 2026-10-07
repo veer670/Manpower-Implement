@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { removeContractor, upsertContractor } from "@/lib/dataset";
+import { pruneUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
@@ -102,7 +103,15 @@ export default function RosterTable() {
                   </td>
                   <td className="py-1.5 text-right">
                     <button
-                      onClick={() => removeContractor(c.id)}
+                      onClick={() => {
+                        removeContractor(c.id);
+                        // Its login would otherwise be left pointing at nothing.
+                        pruneUsers(
+                          new Set(
+                            data.contractors.filter((x) => x.id !== c.id).map((x) => x.id),
+                          ),
+                        );
+                      }}
                       aria-label={`Remove ${c.name} from the roster`}
                       title={`Remove ${c.name}`}
                       className="rounded-md p-1.5 text-ink-muted hover:bg-surface-2 hover:text-[var(--critical)]"

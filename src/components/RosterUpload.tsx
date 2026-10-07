@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { parseRoster } from "@/lib/parse";
 import { replaceRoster, resetToSample, saveDay } from "@/lib/dataset";
+import { pruneUsers } from "@/lib/auth";
 import { longDate, num } from "@/lib/format";
 import { rosterCsv } from "@/lib/sample";
 import { useStore } from "@/lib/store";
@@ -41,6 +42,8 @@ export default function RosterUpload() {
         setError(result.warnings.join(" ") || "No contractor rows found in that file.");
       } else {
         replaceRoster(result.contractors, file.name);
+        // Logins for contractors the new sheet dropped have nothing to enter.
+        pruneUsers(new Set(result.contractors.map((c) => c.id)));
         // A sheet that also carries the day's figures is filed against today,
         // which is what a freshly exported register is.
         if (result.hadActualColumn && result.actuals.size > 0 && today) {

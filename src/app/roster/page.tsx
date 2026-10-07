@@ -1,10 +1,19 @@
 "use client";
 
+import AdminOnly from "@/components/AdminOnly";
 import Card from "@/components/Card";
 import RosterTable from "@/components/RosterTable";
 import RosterUpload from "@/components/RosterUpload";
 
 export default function RosterPage() {
+  return (
+    <AdminOnly>
+      <Roster />
+    </AdminOnly>
+  );
+}
+
+function Roster() {
   return (
     <div className="mx-auto max-w-[1000px] space-y-5">
       <div>

@@ -28,11 +28,36 @@ read-only, with one editable box per contractor.
 | **Dashboard** | Today's manpower against commitment, fill rate, shortfall, the day-by-day trend, and breakdowns by contractor type and by contractor |
 | **Daily entry** | The register, pre-filled. Type the day's figures, see variance and status update live, save |
 | **Roster** | Add, edit and remove contractors; import the whole list from a sheet |
+| **User create** | Give a contractor a user ID and password so they can enter their own figures |
 
 Fill rate is banded so shortfalls surface without reading numbers:
 **≥ 95 %** on commitment · **≥ 85 %** slightly short · **≥ 70 %** short ·
 **below 70 %** critically short. Status is always icon + label + colour, never
 colour alone. Over-supply counts as met, not as a problem.
+
+## Contractor logins
+
+**User create** issues one login per contractor. The user ID is suggested from
+the contractor name (`Prajapati` → `prajapati`) and the password is generated
+unless you type one.
+
+A contractor signs in at `/login` and gets a single screen — **My manpower** —
+showing only their own row. They cannot see the dashboard, the roster, other
+contractors' figures, or the login list, by the nav or by typing the URL.
+
+The password is shown **once**, at the moment it is issued, and is stored as a
+PBKDF2-SHA256 hash with a per-user salt. It cannot be read back; if it is lost,
+use **Reset password** to issue a new one.
+
+> **These logins separate roles, not data.** There is no server to check a
+> password against, so they control what a signed-in person sees and can edit
+> — which is genuinely useful — but anyone with access to the browser can still
+> read the underlying storage. Passwords are hashed rather than stored in plain
+> text so the model ports to a real backend unchanged. Treat this as role
+> separation until there is one.
+
+The site office is simply "nobody signed in" — there is no admin password,
+because one that cannot be enforced would be theatre.
 
 ## Getting started
 
@@ -81,6 +106,9 @@ blocks are ignored without comment, because hand-kept sheets are full of them.
   sent nobody — otherwise an unfinished form reads as a disaster.
 - **Committed is a standing figure.** It does not vary by day. Edit it on the
   Roster page and it applies everywhere.
+- **A contractor's save touches only their own rows.** Saving scopes itself to
+  the contractors on screen, so one contractor filing their figure never wipes
+  another's for the same day.
 - **Dates never shift.** Day-first is assumed where day and month are both
   ambiguous (`01-10-2026` is 1 October), and nothing goes through
   `toISOString()`, which moves the date back a day in any timezone ahead of
@@ -92,8 +120,10 @@ blocks are ignored without comment, because hand-kept sheets are full of them.
 src/
   app/
     page.tsx          Dashboard
-    entry/            Daily manpower entry
+    entry/            Daily manpower entry (scoped when a contractor signs in)
     roster/           Contractor master list + import
+    users/            Create contractor logins
+    login/            Contractor sign in
     globals.css       Design tokens (light & dark)
   components/
     charts/           Recharts wrappers + shared chart primitives
@@ -102,6 +132,7 @@ src/
     RosterUpload.tsx  Sheet import
     GroupTable.tsx    Readable twin of the charts
   lib/
+    auth.ts           Per-contractor logins, PBKDF2 hashing, session
     parse.ts          Sheet → roster, with loose header matching
     metrics.ts        Aggregation by type, by contractor, by day
     dataset.ts        External store, backed by localStorage

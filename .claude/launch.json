@@ -4,8 +4,11 @@
     {
       "name": "manpower-dashboard",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 4300
     }
   ]
 }

@@ -97,14 +97,19 @@ export function removeContractor(id: string): void {
  * Save one day's manpower. Contractors left blank are recorded as "not
  * entered" (no row) rather than zero, so an unfilled form never reads as
  * nobody turning up.
+ *
+ * Only the contractors present in `actuals` are touched. That scoping is what
+ * lets a contractor save their own row without wiping everyone else's for the
+ * same day.
  */
 export function saveDay(date: string, actuals: Map<string, number | null>): void {
-  const others = current.entries.filter((e) => e.date !== date);
-  const today: DailyEntry[] = [];
+  const scope = new Set(actuals.keys());
+  const untouched = current.entries.filter((e) => e.date !== date || !scope.has(e.contractorId));
+  const saved: DailyEntry[] = [];
   actuals.forEach((actual, contractorId) => {
-    if (actual != null) today.push({ date, contractorId, actual });
+    if (actual != null) saved.push({ date, contractorId, actual });
   });
-  commit({ ...current, entries: [...others, ...today], isSample: false });
+  commit({ ...current, entries: [...untouched, ...saved], isSample: false });
 }
 
 export function resetToSample(): void {
