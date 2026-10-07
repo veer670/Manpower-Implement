@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { removeContractor, upsertContractor } from "@/lib/dataset";
+import { removeContractor, removeType, upsertContractor } from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -22,12 +22,21 @@ export default function RosterTable() {
     a.localeCompare(b),
   );
 
+  function deleteType(type: string) {
+    removeType(type);
+    // Logins for the contractors that just went would otherwise point at
+    // nothing.
+    pruneUsers(new Set(data.contractors.filter((c) => c.type !== type).map((c) => c.id)));
+  }
+
   if (openType === null) {
     return (
       <div className="space-y-5">
         <TypePicker
           types={types}
           onSelect={setOpenType}
+          onDelete={deleteType}
+          countFor={(t) => data.contractors.filter((c) => c.type === t).length}
           emptyMessage="No contractors yet. Add one below, or import a sheet."
         />
         <AddContractor types={types} />

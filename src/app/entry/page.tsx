@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, FolderPlus, UserPlus } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
 import TypePicker from "@/components/TypePicker";
-import QuickAdd, { type QuickAddMode } from "@/components/QuickAdd";
+import QuickAdd from "@/components/QuickAdd";
 import { longDate, num } from "@/lib/format";
 import { allDates, rowsForDate } from "@/lib/metrics";
+import { removeType } from "@/lib/dataset";
 import { useStore } from "@/lib/store";
 import { useSession } from "@/lib/useAuth";
 import * as todayStore from "@/lib/today";
@@ -22,7 +23,7 @@ export default function EntryPage() {
   );
   const [picked, setPicked] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
-  const [adding, setAdding] = useState<QuickAddMode | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const date = picked ?? today;
   const dates = useMemo(() => allDates(data.entries), [data.entries]);
@@ -87,32 +88,18 @@ export default function EntryPage() {
 
       {/* A signed-in contractor has one row and no business editing the roster. */}
       {!session && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAdding(adding === "type" ? null : "type")}
-            aria-expanded={adding === "type"}
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-              adding === "type"
-                ? "border-series-1 bg-surface-2 text-ink"
-                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
-            }`}
-          >
-            <FolderPlus size={13} strokeWidth={2.4} aria-hidden />
-            Add type
-          </button>
-          <button
-            onClick={() => setAdding(adding === "contractor" ? null : "contractor")}
-            aria-expanded={adding === "contractor"}
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-              adding === "contractor"
-                ? "border-series-1 bg-surface-2 text-ink"
-                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
-            }`}
-          >
-            <UserPlus size={13} strokeWidth={2.4} aria-hidden />
-            Add contractor
-          </button>
-        </div>
+        <button
+          onClick={() => setAdding((a) => !a)}
+          aria-expanded={adding}
+          className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+            adding
+              ? "border-series-1 bg-surface-2 text-ink"
+              : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+          }`}
+        >
+          <UserPlus size={13} strokeWidth={2.4} aria-hidden />
+          Add contractor
+        </button>
       )}
     </div>
   );
@@ -120,10 +107,9 @@ export default function EntryPage() {
   const quickAdd =
     !session && adding ? (
       <QuickAdd
-        key={`${adding}:${type ?? "all"}`}
-        mode={adding}
-        presetType={adding === "contractor" && type ? type : undefined}
-        onClose={() => setAdding(null)}
+        key={type ?? "all"}
+        presetType={type ?? undefined}
+        onClose={() => setAdding(false)}
       />
     ) : null;
 
@@ -161,7 +147,9 @@ export default function EntryPage() {
           <TypePicker
             types={types}
             onSelect={setType}
-            emptyMessage="No contractors on the roster yet. Add them under Roster first."
+            onDelete={session ? undefined : removeType}
+            countFor={(t) => allRows.filter((r) => r.type === t).length}
+            emptyMessage="No contractors on the roster yet. Add one with the button above."
           />
         </Card>
       ) : (

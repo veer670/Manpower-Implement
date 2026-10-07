@@ -9,10 +9,13 @@
 :root {
   color-scheme: light;
 
-  /* surfaces & chrome */
-  --plane:          #f9f9f7;
+  /* surfaces & chrome.
+     The page plane is deliberately a step below the card surface so cards
+     lift off it. --surface-1 is also the chart surface the categorical
+     palette was validated against, so it stays put. */
+  --plane:          #f0efec;
   --surface-1:      #fcfcfb;
-  --surface-2:      #f3f3f0;
+  --surface-2:      #f4f4f1;
   --border:         rgba(11, 11, 11, 0.10);
   --gridline:       #e1e0d9;
   --axis:           #c3c2b7;

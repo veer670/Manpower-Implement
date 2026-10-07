@@ -6,21 +6,18 @@ import { upsertContractor } from "@/lib/dataset";
 import { useStore } from "@/lib/store";
 import { contractorId } from "@/lib/types";
 
-export type QuickAddMode = "type" | "contractor";
-
 /**
  * Add a contractor without leaving Daily entry.
  *
- * A contractor type is not a record of its own — it exists only as a field on
- * a contractor — so creating a type asks for its first contractor in the same
- * breath. A type with nobody under it would vanish on reload.
+ * The type field takes an existing type or a new one typed in, which is how a
+ * new type gets created: a contractor type is not a record of its own, it
+ * exists only as a field on a contractor, so a type with nobody under it
+ * would not survive a reload.
  */
 export default function QuickAdd({
-  mode,
   presetType,
   onClose,
 }: {
-  mode: QuickAddMode;
   /** When adding inside an open type, that type is fixed. */
   presetType?: string;
   onClose: () => void;
@@ -30,7 +27,7 @@ export default function QuickAdd({
     a.localeCompare(b),
   );
 
-  const [type, setType] = useState(mode === "contractor" ? (presetType ?? existingTypes[0] ?? "") : "");
+  const [type, setType] = useState(presetType ?? "");
   const [name, setName] = useState("");
   const [committed, setCommitted] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -55,33 +52,31 @@ export default function QuickAdd({
       setError("Committed must be a number.");
       return;
     }
-    if (mode === "type" && existingTypes.some((x) => x.toLowerCase() === t.toLowerCase())) {
-      setError(`"${t}" already exists. Use Add contractor to add to it.`);
-      return;
-    }
-    const id = contractorId(t, n);
+    const id = contractorId(canonical ?? t, n);
     if (data.contractors.some((x) => x.id === id)) {
       setError(`${n} is already on the roster under ${t}.`);
       return;
     }
 
-    upsertContractor({ id, type: t, name: n, committed: Math.round(c) });
+    upsertContractor({ id, type: canonical ?? t, name: n, committed: Math.round(c) });
     onClose();
   }
 
-  const fixedType = mode === "contractor" && presetType;
+  const fixedType = Boolean(presetType);
+
+  // Typing a type that already exists, in any casing, should land on it
+  // rather than create a near-duplicate beside it.
+  const canonical = existingTypes.find((x) => x.toLowerCase() === type.trim().toLowerCase());
+  const isNewType = type.trim() !== "" && !canonical;
 
   return (
     <div className="mb-4 rounded-xl border border-hairline bg-surface-2 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-xs font-semibold text-ink">
-            {mode === "type" ? "New contractor type" : "New contractor"}
-          </h3>
+          <h3 className="text-xs font-semibold text-ink">New contractor</h3>
           <p className="mt-0.5 text-xs text-ink-secondary">
-            {mode === "type"
-              ? "A type needs at least one contractor under it, so add the first one here."
-              : "Added to the roster, and available to enter against straight away."}
+            Added to the roster, and available to enter against straight away. Type a new
+            contractor type to create one.
           </p>
         </div>
         <button
@@ -97,22 +92,20 @@ export default function QuickAdd({
         {!fixedType && (
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium text-ink-muted">Contractor type</span>
-            {mode === "contractor" && existingTypes.length > 0 ? (
-              <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
-                {existingTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                placeholder="Fire Fighting"
-                className={field}
-              />
-            )}
+            {/* A combobox, not a select: picking an existing type and naming a
+                new one are the same gesture. */}
+            <input
+              list="quickadd-types"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              placeholder="Electrical"
+              className={field}
+            />
+            <datalist id="quickadd-types">
+              {existingTypes.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
           </label>
         )}
 
@@ -144,15 +137,20 @@ export default function QuickAdd({
           className="flex items-center gap-1.5 rounded-lg bg-series-1 px-3.5 py-2 text-xs font-semibold text-white"
         >
           <Check size={14} strokeWidth={2.6} aria-hidden />
-          {mode === "type" ? "Create type" : "Add contractor"}
+          Add contractor
         </button>
       </div>
 
-      {fixedType && (
+      {fixedType ? (
         <p className="mt-2 text-xs text-ink-muted">
           Adding to <span className="font-medium text-ink-secondary">{presetType}</span>.
         </p>
-      )}
+      ) : isNewType ? (
+        <p className="mt-2 text-xs text-ink-muted">
+          <span className="font-medium text-ink-secondary">{type.trim()}</span> is a new
+          contractor type — it will be created with this contractor.
+        </p>
+      ) : null}
       {error && <p className="mt-2 text-xs text-[var(--critical)]">{error}</p>}
     </div>
   );

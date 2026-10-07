@@ -84,6 +84,23 @@ export function upsertContractor(contractor: Contractor): void {
   commit({ ...current, contractors, isSample: false });
 }
 
+/**
+ * Remove a whole contractor type: every contractor under it and all of their
+ * saved manpower. Callers confirm first — this cannot be undone.
+ */
+export function removeType(type: string): void {
+  const doomed = new Set(
+    current.contractors.filter((c) => c.type === type).map((c) => c.id),
+  );
+  if (doomed.size === 0) return;
+  commit({
+    ...current,
+    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
+    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
+    isSample: false,
+  });
+}
+
 export function removeContractor(id: string): void {
   commit({
     ...current,
