@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { removeContractor, saveDay } from "@/lib/dataset";
 import { pruneUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
-import { FootRow, HeadRow, Row, Td, Th } from "./Table";
 import DeleteButton from "./DeleteButton";
+import { initialsOf } from "./Table";
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -26,11 +26,10 @@ export default function EntryForm({
 }: {
   rows: DayRow[];
   date: string;
+  /** Name the type above each group — off when already inside one type. */
+  showTypeColumn?: boolean;
   /** Off for a signed-in contractor — they may report, not reshape the roster. */
   canEditRoster?: boolean;
-  /** Off when the table is already filtered to a single type — the column
-   *  would then repeat the heading on every row. */
-  showTypeColumn?: boolean;
 }) {
   const seed = () =>
     Object.fromEntries(rows.map((r) => [r.id, r.actual == null ? "" : String(r.actual)]));
@@ -78,18 +77,7 @@ export default function EntryForm({
     setSaved(false);
   }
 
-  function handleSave() {
-    saveDay(date, parsed);
-    setSaved(true);
-  }
-
-  function handleReset() {
-    setDraft(seed());
-    setSaved(false);
-  }
-
-  // Grouped by type so the table reads like the register it replaces, with
-  // the type named once per block.
+  // Grouped by type so the list reads like the register it replaces.
   const blocks = useMemo(() => {
     const map = new Map<string, DayRow[]>();
     for (const r of rows) {
@@ -102,118 +90,133 @@ export default function EntryForm({
 
   if (rows.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-ink-muted">
-        No contractors on the roster yet. Add them under Roster first.
-      </p>
+      <div className="rounded-xl border border-dashed border-hairline py-12 text-center">
+        <p className="text-sm text-ink-muted">
+          No contractors here yet. Add one with the button above.
+        </p>
+      </div>
     );
   }
 
   return (
     <div>
-      <div className="overflow-x-auto">
-        <table className={`w-full text-sm ${showTypeColumn ? "min-w-[760px]" : "min-w-[640px]"}`}>
-          <thead>
-            <HeadRow>
-              <Th>Sr. No.</Th>
-              {showTypeColumn && <Th>Contractor type</Th>}
-              <Th>Contractor name</Th>
-              <Th align="right">Committed</Th>
-              <Th align="right">Today&rsquo;s manpower</Th>
-              <Th align="right">Variance</Th>
-              <Th>Status</Th>
-              {canEditRoster && (
-                <Th align="right">
-                  <span className="sr-only">Actions</span>
-                </Th>
-              )}
-            </HeadRow>
-          </thead>
-          <tbody>
-            {blocks.map(([type, block]) =>
-              block.map((r, i) => {
+      <div className="space-y-5">
+        {blocks.map(([type, block]) => (
+          <section key={type}>
+            {showTypeColumn && (
+              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+                {type}
+              </h3>
+            )}
+            <ul className="space-y-2">
+              {block.map((r) => {
                 const srNo = rows.indexOf(r) + 1;
                 const value = parsed.get(r.id) ?? null;
                 const rate =
                   value == null ? null : fillRate({ committed: r.committed, actual: value });
+
                 return (
-                  <Row key={r.id}>
-                    <Td align="left" className="text-ink-muted">{srNo}</Td>
-                    {showTypeColumn && (
-                      <Td align="left" numeric={false}>
-                        {/* Named once per block, as it is on the register. */}
-                        {i === 0 ? <span className="font-semibold text-ink">{type}</span> : null}
-                      </Td>
-                    )}
-                    <Td align="left" numeric={false} className="font-semibold text-ink">
-                      {r.name}
-                    </Td>
-                    <Td>{num(r.committed)}</Td>
-                    <td className="py-2 pr-4 text-right">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        aria-label={`Manpower reported by ${r.name} under ${type}`}
-                        value={draft[r.id] ?? ""}
-                        onChange={(e) => update(r.id, e.target.value)}
-                        placeholder="—"
-                        className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
-                      />
-                    </td>
-                    <Td
-                      className={
-                        value != null && value - r.committed < 0
-                          ? "font-medium text-[var(--critical)]"
-                          : "font-medium"
-                      }
-                    >
-                      {value == null ? "—" : signed(value - r.committed)}
-                    </Td>
-                    <td className="py-2.5">
-                      {value == null ? (
-                        <span className="text-xs text-ink-muted">Not entered</span>
-                      ) : (
-                        <StatusChip rate={rate} />
-                      )}
-                    </td>
+                  <li
+                    key={r.id}
+                    className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-series-1/35"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+                      <div className="flex min-w-0 flex-1 basis-56 items-center gap-3.5">
+                        <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
+                          {srNo}
+                        </span>
+                        <span
+                          aria-hidden
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-bold tracking-wide text-ink-secondary"
+                        >
+                          {initialsOf(r.name)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                          {r.name}
+                        </span>
+                      </div>
+
+                      <div className="flex items-end gap-5">
+                        <Field label="Committed">
+                          <span className="tnum block py-2 text-right text-sm text-ink-secondary">
+                            {num(r.committed)}
+                          </span>
+                        </Field>
+
+                        <Field label={<>Today&rsquo;s manpower</>}>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            aria-label={`Manpower reported by ${r.name} under ${r.type}`}
+                            value={draft[r.id] ?? ""}
+                            onChange={(e) => update(r.id, e.target.value)}
+                            placeholder="—"
+                            className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
+                          />
+                        </Field>
+
+                        <Field label="Variance">
+                          <span
+                            className={`tnum block w-14 py-2 text-right text-sm font-medium ${
+                              value != null && value - r.committed < 0
+                                ? "text-[var(--critical)]"
+                                : "text-ink-secondary"
+                            }`}
+                          >
+                            {value == null ? "—" : signed(value - r.committed)}
+                          </span>
+                        </Field>
+
+                        <div className="w-36 py-2">
+                          {value == null ? (
+                            <span className="text-xs text-ink-muted">Not entered</span>
+                          ) : (
+                            <StatusChip rate={rate} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     {canEditRoster && (
-                      <td className="py-2.5 pl-4 text-right">
+                      <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
                         <DeleteButton
                           label={`${r.name} from the roster`}
                           onConfirm={() => {
                             removeContractor(r.id);
                             // Its login would otherwise point at nothing.
-                            pruneUsers(
-                              new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)),
-                            );
+                            pruneUsers(new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)));
                           }}
                         />
-                      </td>
+                      </div>
                     )}
-                  </Row>
+                  </li>
                 );
-              }),
-            )}
-          </tbody>
-          <tfoot>
-            <FootRow>
-              <td className="py-3 pr-4" colSpan={showTypeColumn ? 3 : 2}>
-                Total — {num(totals.filled)} of {num(rows.length)} entered
-              </td>
-              <Td className="text-ink">{num(totals.committed)}</Td>
-              <Td className="text-ink">{num(totals.actual)}</Td>
-              <Td className="text-ink">{signed(totals.actual - totals.committed)}</Td>
-              <td className="tnum py-3 text-xs text-ink-secondary">
-                {pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
-              </td>
-              {canEditRoster && <td />}
-            </FootRow>
-          </tfoot>
-        </table>
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      {/* Totals, as a strip under the cards rather than a table foot. */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-hairline bg-surface-2 px-4 py-3">
+        <span className="flex-1 text-sm font-semibold text-ink">
+          Total — {num(totals.filled)} of {num(rows.length)} entered
+        </span>
+        <Summary label="Committed" value={num(totals.committed)} />
+        <Summary label="Reported" value={num(totals.actual)} />
+        <Summary label="Variance" value={signed(totals.actual - totals.committed)} />
+        <Summary
+          label="Fill rate"
+          value={pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
-          onClick={handleSave}
+          onClick={() => {
+            saveDay(date, parsed);
+            setSaved(true);
+          }}
           disabled={!dirty}
           className="flex items-center gap-1.5 rounded-lg bg-series-1 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
         >
@@ -222,7 +225,10 @@ export default function EntryForm({
         </button>
         {dirty && (
           <button
-            onClick={handleReset}
+            onClick={() => {
+              setDraft(seed());
+              setSaved(false);
+            }}
             className="flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
           >
             <RotateCcw size={14} strokeWidth={2.4} aria-hidden />
@@ -244,3 +250,25 @@ export default function EntryForm({
   );
 }
 
+/** Micro-caps label above a value, so each card column stays identifiable. */
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+        {label}
+      </span>
+      <span className="tnum text-sm font-semibold text-ink">{value}</span>
+    </span>
+  );
+}

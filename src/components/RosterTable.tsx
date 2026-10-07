@@ -9,7 +9,7 @@ import { useStore } from "@/lib/store";
 import { contractorId, type Contractor } from "@/lib/types";
 import TypePicker from "./TypePicker";
 import DeleteButton from "./DeleteButton";
-import { FootRow, HeadRow, Row, Td, Th } from "./Table";
+import { initialsOf } from "./Table";
 
 /**
  * The master list, in two levels: contractor types first, then the
@@ -72,53 +72,62 @@ export default function RosterTable() {
         All contractor types
       </button>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
-          <thead>
-            <HeadRow>
-              <Th>Sr. No.</Th>
-              <Th>Contractor name</Th>
-              <Th align="right">Committed</Th>
-              <Th align="right">
-                <span className="sr-only">Actions</span>
-              </Th>
-            </HeadRow>
-          </thead>
-          <tbody>
-            {list.map((c, i) => (
-              <Row key={c.id}>
-                <Td align="left" className="text-ink-muted">
+      <ul className="space-y-2">
+        {list.map((c, i) => (
+          <li
+            key={c.id}
+            className="group flex items-stretch overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-series-1/35"
+          >
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+              <div className="flex min-w-0 flex-1 basis-56 items-center gap-3.5">
+                <span className="tnum w-5 shrink-0 text-xs font-medium text-ink-muted">
                   {i + 1}
-                </Td>
-                <Td align="left" numeric={false} className="font-semibold text-ink">
+                </span>
+                <span
+                  aria-hidden
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-[11px] font-bold tracking-wide text-ink-secondary"
+                >
+                  {initialsOf(c.name)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                   {c.name}
-                </Td>
-                <td className="py-2 pr-4 text-right">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    aria-label={`Committed headcount for ${c.name}`}
-                    defaultValue={c.committed}
-                    onBlur={(e) => editCommitted(c, e.target.value.trim())}
-                    className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
-                  />
-                </td>
-                <td className="py-2.5 pl-4 text-right">
-                  <DeleteButton label={`${c.name} from the roster`} onConfirm={() => remove(c)} />
-                </td>
-              </Row>
-            ))}
-          </tbody>
-          <tfoot>
-            <FootRow>
-              <td className="py-3 pr-4" colSpan={2}>
-                {num(list.length)} contractor{list.length === 1 ? "" : "s"}
-              </td>
-              <Td className="text-ink">{num(list.reduce((s, c) => s + c.committed, 0))}</Td>
-              <td />
-            </FootRow>
-          </tfoot>
-        </table>
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+                  Committed
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label={`Committed headcount for ${c.name}`}
+                  defaultValue={c.committed}
+                  onBlur={(e) => editCommitted(c, e.target.value.trim())}
+                  className="tnum w-24 rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink hover:border-ink-muted/50 focus:border-series-1 focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-series-1/25"
+                />
+              </div>
+            </div>
+
+            <div className="flex w-11 shrink-0 items-center justify-center border-l border-hairline/60 transition-colors hover:bg-surface-2">
+              <DeleteButton label={`${c.name} from the roster`} onConfirm={() => remove(c)} />
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-hairline bg-surface-2 px-4 py-3">
+        <span className="flex-1 text-sm font-semibold text-ink">
+          {num(list.length)} contractor{list.length === 1 ? "" : "s"}
+        </span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+            Committed
+          </span>
+          <span className="tnum text-sm font-semibold text-ink">
+            {num(list.reduce((sum, c) => sum + c.committed, 0))}
+          </span>
+        </span>
       </div>
 
       <AddContractor types={types} fixedType={openType} />

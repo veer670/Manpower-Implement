@@ -6,7 +6,7 @@ import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
 import TypePicker from "@/components/TypePicker";
 import QuickAdd from "@/components/QuickAdd";
-import { longDate, num } from "@/lib/format";
+import { longDate } from "@/lib/format";
 import { allDates, rowsForDate } from "@/lib/metrics";
 import { removeType } from "@/lib/dataset";
 import { useStore } from "@/lib/store";
@@ -75,7 +75,6 @@ export default function EntryPage() {
   // a door with nothing behind it.
   const showPicker = !session && activeType === null;
 
-  const entered = allRows.filter((r) => r.actual != null).length;
 
   const headerControls = (
     <div className="flex flex-col items-end gap-2">
@@ -138,15 +137,7 @@ export default function EntryPage() {
       </div>
 
       {showPicker ? (
-        <Card
-          title={date ? longDate(date) : "Loading…"}
-          subtitle={
-            allRows.length === 0
-              ? "No contractors on the roster yet."
-              : `${num(entered)} of ${num(allRows.length)} contractors entered for this day.`
-          }
-          actions={headerControls}
-        >
+        <Card title="Contractor type" actions={headerControls}>
           {quickAdd}
           <TypePicker
             types={types}
