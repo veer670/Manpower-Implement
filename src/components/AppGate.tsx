@@ -44,8 +44,7 @@ export default function AppGate({ children }: { children: ReactNode }) {
         icon={<Database size={22} strokeWidth={2.1} aria-hidden />}
         title="The roster is not available"
       >
-        {status.message} If this is a fresh deployment, its database has not been
-        attached yet.
+        {status.message}
       </Splash>
     );
   }

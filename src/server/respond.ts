@@ -17,14 +17,15 @@ export function fail(where: string, err: unknown): NextResponse {
   const message = err instanceof Error ? err.message : String(err);
 
   if (message.includes("DATABASE_URL")) {
-    return NextResponse.json(
-      {
-        error:
-          "This site has no database attached yet, so there is nothing to sign in " +
-          "against. Attach one and set DATABASE_URL.",
-      },
-      { status: 503 },
-    );
+    // The fix differs by where you are standing, and sending someone to the
+    // wrong one costs more than the message saves.
+    const error =
+      process.env.NODE_ENV === "development"
+        ? "No database is connected. Copy .env.example to .env.local and put your " +
+          "Postgres connection string in DATABASE_URL, then restart the dev server."
+        : "This site has no database attached yet. Attach one and set DATABASE_URL " +
+          "in the project's environment variables.";
+    return NextResponse.json({ error }, { status: 503 });
   }
 
   console.error(`${where}:`, err);

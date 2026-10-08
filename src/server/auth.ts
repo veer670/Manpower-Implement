@@ -79,10 +79,26 @@ export async function destroySession(): Promise<void> {
  * trusting anything in the cookie beyond the opaque token, so deleting the row
  * revokes the session immediately.
  */
+/**
+ * On a developer's own machine, skip the login.
+ *
+ * Gated on NODE_ENV === "development", which only `next dev` sets: `next
+ * build`, `next start` and every Vercel deployment are "production", so this
+ * cannot reach a deployed site however the code is bundled. Set
+ * REQUIRE_LOGIN=1 in .env.local to exercise the real flow locally.
+ */
+function localBypass(): Session | null {
+  if (process.env.NODE_ENV !== "development") return null;
+  if (process.env.REQUIRE_LOGIN === "1") return null;
+  return { username: "localhost", role: "office", contractorId: null, category: null };
+}
+
 export async function getSession(): Promise<Session | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  // Before the query, so localhost needs no session row — and no database — to
+  // get past the door.
+  if (!token) return localBypass();
 
   const rows = await db
     .select({
@@ -97,7 +113,7 @@ export async function getSession(): Promise<Session | null> {
     .limit(1);
 
   const row = rows[0];
-  if (!row) return null;
+  if (!row) return localBypass();
   return {
     username: row.username,
     role: row.role as Role,
