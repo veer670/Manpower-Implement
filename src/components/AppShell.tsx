@@ -123,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-2 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
               >
                 <LogIn size={13} strokeWidth={2.3} aria-hidden />
-                Contractor sign in
+                Sign in
               </Link>
             </>
           )}
@@ -162,8 +162,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             ) : (
               <Link
                 href="/login"
-                aria-label="Contractor sign in"
-                title="Contractor sign in"
+                aria-label="Sign in"
+                title="Sign in"
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted"
               >
                 <KeyRound size={16} strokeWidth={2} aria-hidden />

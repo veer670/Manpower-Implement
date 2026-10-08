@@ -52,9 +52,10 @@ export default function LoginPage() {
         <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-white">
           <HardHat size={22} strokeWidth={2.1} aria-hidden />
         </span>
-        <h1 className="mt-4 text-xl font-semibold tracking-tight text-ink">Contractor sign in</h1>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight text-ink">Sign in</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Use the user ID and password the site office gave you.
+          Use the user ID and password the site office gave you — whether you manage a
+          category or report for one contractor.
         </p>
       </div>
 
