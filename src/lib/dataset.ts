@@ -1,76 +1,40 @@
-import {
-  sampleContractors,
-  sampleEntries,
-  SAMPLE_ANCHOR,
-  SAMPLE_CATEGORY_ORDER,
-  SAMPLE_TYPE_ORDER,
-} from "./sample";
-import {
-  contractorId,
-  typeKey,
-  type AppData,
-  type Contractor,
-  type DailyEntry,
-} from "./types";
-
-// v3: the roster gained a category level and editable serial numbers, so ids
-// from v2 no longer match.
-const STORAGE_KEY = "manpower.data.v3";
-
-export type { AppData } from "./types";
+import { api, ApiError } from "./api";
+import { contractorId, typeKey, type AppData, type Contractor, type DailyEntry } from "./types";
 
 /**
- * Module constant, not a function call per render: useSyncExternalStore needs
- * a server snapshot that is stable across calls, and the prerender needs it to
- * contain no "now".
+ * The roster and the day's figures, held in memory and backed by the server.
+ *
+ * Every mutation applies locally first and then calls the API. The optimistic
+ * step is what keeps typing in a manpower box feeling immediate over a site
+ * connection; if the server disagrees, `reload()` puts the truth back and the
+ * error surfaces. The exported shape is unchanged from the browser-only
+ * version on purpose — the screens did not need to learn about HTTP.
  */
-export const SAMPLE_DATA: AppData = {
-  contractors: sampleContractors(),
-  entries: sampleEntries(),
-  categoryOrder: SAMPLE_CATEGORY_ORDER,
-  typeOrder: SAMPLE_TYPE_ORDER,
-  source: "Sample roster",
-  loadedAt: `${SAMPLE_ANCHOR}T00:00:00.000Z`,
-  isSample: true,
+
+const EMPTY: AppData = {
+  contractors: [],
+  entries: [],
+  categoryOrder: {},
+  typeOrder: {},
+  source: "Shared database",
+  loadedAt: "",
+  isSample: false,
 };
 
-function read(): AppData | null {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return null;
-    const parsed = JSON.parse(saved) as AppData;
-    if (!Array.isArray(parsed.contractors) || !Array.isArray(parsed.entries)) return null;
-    return {
-      ...parsed,
-      categoryOrder: parsed.categoryOrder ?? {},
-      typeOrder: parsed.typeOrder ?? {},
-    };
-  } catch {
-    // A corrupt entry, or a browser refusing storage, is not worth failing the
-    // page over — the sample roster is a working fallback.
-    return null;
-  }
-}
+export type Status =
+  | { kind: "loading" }
+  | { kind: "ready" }
+  /** The server is reachable but nobody is signed in. */
+  | { kind: "signed-out" }
+  /** Reachable but unusable — almost always a database that is not attached. */
+  | { kind: "error"; message: string };
 
-/**
- * Read once at module load on the client. React hydrates against
- * getServerSnapshot and only then switches to this value, so there is no
- * hydration mismatch and no setState inside an effect.
- */
-let current: AppData = typeof window === "undefined" ? SAMPLE_DATA : (read() ?? SAMPLE_DATA);
+let current: AppData = EMPTY;
+let status: Status = { kind: "loading" };
+let loading: Promise<void> | null = null;
 
 const listeners = new Set<() => void>();
-
-function commit(next: AppData) {
-  current = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Quota, or private mode: the change still applies for this session, it
-    // just will not survive a reload.
-  }
-  listeners.forEach((l) => l());
-}
+const emit = () => listeners.forEach((l) => l());
 
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -78,30 +42,67 @@ export function subscribe(listener: () => void): () => void {
 }
 
 export const getSnapshot = (): AppData => current;
+export const getServerSnapshot = (): AppData => EMPTY;
 
-/** Must be referentially stable across calls. */
-export const getServerSnapshot = (): AppData => SAMPLE_DATA;
+export const getStatus = (): Status => status;
+// Must be the same object every call: useSyncExternalStore compares the
+// server snapshot by identity, and a fresh object each time is an infinite
+// render loop.
+const LOADING: Status = { kind: "loading" };
+export const getServerStatus = (): Status => LOADING;
 
-/**
- * Replace the roster. Daily entries for contractors that are still on the
- * roster are kept — re-importing a corrected sheet must not wipe history.
- */
-export function replaceRoster(
-  contractors: Contractor[],
-  source: string,
-  order?: { categoryOrder?: Record<string, number>; typeOrder?: Record<string, number> },
-): void {
-  const live = new Set(contractors.map((c) => c.id));
-  commit({
-    contractors,
-    entries: current.entries.filter((e) => live.has(e.contractorId)),
-    categoryOrder: order?.categoryOrder ?? {},
-    typeOrder: order?.typeOrder ?? {},
-    source,
-    loadedAt: new Date().toISOString(),
-    isSample: false,
+type RosterResponse = {
+  contractors: Contractor[];
+  categoryOrder: Record<string, number>;
+  typeOrder: Record<string, number>;
+};
+
+/** Fetch everything. Safe to call repeatedly; concurrent calls share one trip. */
+export function reload(): Promise<void> {
+  loading ??= (async () => {
+    try {
+      const [roster, entries] = await Promise.all([
+        api.get<RosterResponse>("/api/roster"),
+        api.get<{ entries: DailyEntry[] }>("/api/entries"),
+      ]);
+      current = {
+        contractors: roster.contractors,
+        entries: entries.entries,
+        categoryOrder: roster.categoryOrder,
+        typeOrder: roster.typeOrder,
+        source: "Shared database",
+        loadedAt: new Date().toISOString(),
+        isSample: false,
+      };
+      status = { kind: "ready" };
+    } catch (err) {
+      current = EMPTY;
+      status =
+        err instanceof ApiError && err.status === 401
+          ? { kind: "signed-out" }
+          : {
+              kind: "error",
+              message: err instanceof Error ? err.message : "Could not load the roster.",
+            };
+    } finally {
+      loading = null;
+      emit();
+    }
+  })();
+  return loading;
+}
+
+/** Apply locally, then confirm with the server; reload if it disagrees. */
+function optimistic(next: AppData, call: () => Promise<unknown>): void {
+  current = next;
+  emit();
+  void call().catch((err) => {
+    console.error("write rejected, reloading:", err);
+    void reload();
   });
 }
+
+/* ---------------------------------------------------------- contractors */
 
 export function upsertContractor(contractor: Contractor): void {
   const i = current.contractors.findIndex((c) => c.id === contractor.id);
@@ -109,22 +110,35 @@ export function upsertContractor(contractor: Contractor): void {
     i >= 0
       ? current.contractors.map((c) => (c.id === contractor.id ? contractor : c))
       : [...current.contractors, contractor];
-  commit({ ...current, contractors, isSample: false });
+
+  optimistic({ ...current, contractors }, () =>
+    i >= 0
+      ? api.patch("/api/roster", {
+          kind: "contractor",
+          id: contractor.id,
+          committed: contractor.committed,
+          srNo: contractor.srNo,
+        })
+      : api.post("/api/roster", {
+          category: contractor.category,
+          type: contractor.type,
+          name: contractor.name,
+          committed: contractor.committed,
+        }),
+  );
 }
 
 export function removeContractor(id: string): void {
-  commit({
-    ...current,
-    contractors: current.contractors.filter((c) => c.id !== id),
-    entries: current.entries.filter((e) => e.contractorId !== id),
-    isSample: false,
-  });
+  optimistic(
+    {
+      ...current,
+      contractors: current.contractors.filter((c) => c.id !== id),
+      entries: current.entries.filter((e) => e.contractorId !== id),
+    },
+    () => api.del("/api/roster", { kind: "contractor", id }),
+  );
 }
 
-/**
- * Remove a whole contractor type: every contractor under it and all of their
- * saved manpower. Callers confirm first — this cannot be undone.
- */
 export function removeType(category: string, type: string): void {
   const doomed = new Set(
     current.contractors.filter((c) => c.category === category && c.type === type).map((c) => c.id),
@@ -132,16 +146,18 @@ export function removeType(category: string, type: string): void {
   if (doomed.size === 0) return;
   const typeOrder = { ...current.typeOrder };
   delete typeOrder[typeKey(category, type)];
-  commit({
-    ...current,
-    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
-    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
-    typeOrder,
-    isSample: false,
-  });
+
+  optimistic(
+    {
+      ...current,
+      contractors: current.contractors.filter((c) => !doomed.has(c.id)),
+      entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
+      typeOrder,
+    },
+    () => api.del("/api/roster", { kind: "type", category, type }),
+  );
 }
 
-/** Remove a category, and with it every type and contractor underneath. */
 export function removeCategory(category: string): void {
   const doomed = new Set(
     current.contractors.filter((c) => c.category === category).map((c) => c.id),
@@ -149,36 +165,37 @@ export function removeCategory(category: string): void {
   if (doomed.size === 0) return;
   const categoryOrder = { ...current.categoryOrder };
   delete categoryOrder[category];
-  // typeKey(category, "") is exactly the prefix every key under this
-  // category starts with.
   const prefix = typeKey(category, "");
   const typeOrder = Object.fromEntries(
     Object.entries(current.typeOrder).filter(([k]) => !k.startsWith(prefix)),
   );
-  commit({
-    ...current,
-    contractors: current.contractors.filter((c) => !doomed.has(c.id)),
-    entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
-    categoryOrder,
-    typeOrder,
-    isSample: false,
-  });
+
+  optimistic(
+    {
+      ...current,
+      contractors: current.contractors.filter((c) => !doomed.has(c.id)),
+      entries: current.entries.filter((e) => !doomed.has(e.contractorId)),
+      categoryOrder,
+      typeOrder,
+    },
+    () => api.del("/api/roster", { kind: "category", category }),
+  );
 }
 
-/* ------------------------------------------------------------- renaming */
+/* -------------------------------------------------------------- renaming */
 
 /**
- * A contractor's id is derived from its category, type and name, so renaming
- * any of the three mints new ids. Everything keyed by id — saved manpower and
- * contractor logins — has to move with them, which is why these return the
- * old→new map rather than just mutating the roster.
+ * Renaming mints new ids, because an id is derived from all three names. The
+ * clash check runs locally so the form can answer immediately; the server
+ * repeats it, and the database cascades the entries.
  */
 export type IdMap = Map<string, string>;
 
-function applyRename(
+function rename(
   changed: Contractor[],
   untouched: Contractor[],
   patch: Partial<AppData>,
+  call: () => Promise<unknown>,
 ): IdMap {
   const map: IdMap = new Map();
   const renamed = changed.map((c) => {
@@ -187,27 +204,26 @@ function applyRename(
     return { ...c, id: next };
   });
 
-  // A rename that collides with an existing contractor would silently merge
-  // two rosters rows into one. Refuse rather than lose a row.
   const seen = new Set(untouched.map((c) => c.id));
   for (const c of renamed) {
     if (seen.has(c.id)) return new Map();
     seen.add(c.id);
   }
 
-  commit({
-    ...current,
-    ...patch,
-    contractors: [...untouched, ...renamed],
-    entries: current.entries.map((e) =>
-      map.has(e.contractorId) ? { ...e, contractorId: map.get(e.contractorId)! } : e,
-    ),
-    isSample: false,
-  });
+  optimistic(
+    {
+      ...current,
+      ...patch,
+      contractors: [...untouched, ...renamed],
+      entries: current.entries.map((e) =>
+        map.has(e.contractorId) ? { ...e, contractorId: map.get(e.contractorId)! } : e,
+      ),
+    },
+    call,
+  );
   return map;
 }
 
-/** Returns the old→new id map, or an empty map when the rename was refused. */
 export function renameCategory(from: string, to: string): IdMap {
   const name = to.trim();
   if (!name || name === from) return new Map();
@@ -230,10 +246,11 @@ export function renameCategory(from: string, to: string): IdMap {
     typeOrder[k.startsWith(oldPrefix) ? typeKey(name, k.slice(oldPrefix.length)) : k] = v;
   }
 
-  return applyRename(
+  return rename(
     changed,
     current.contractors.filter((c) => c.category !== from),
     { categoryOrder, typeOrder },
+    () => api.patch("/api/roster", { kind: "category", category: from, name }),
   );
 }
 
@@ -256,10 +273,11 @@ export function renameType(category: string, from: string, to: string): IdMap {
     delete typeOrder[oldKey];
   }
 
-  return applyRename(
+  return rename(
     changed,
     current.contractors.filter((c) => !(c.category === category && c.type === from)),
     { typeOrder },
+    () => api.patch("/api/roster", { kind: "type", category, type: from, name }),
   );
 }
 
@@ -268,64 +286,78 @@ export function renameContractor(id: string, to: string): IdMap {
   const target = current.contractors.find((c) => c.id === id);
   if (!name || !target || name === target.name) return new Map();
 
-  return applyRename(
+  return rename(
     [{ ...target, name }],
     current.contractors.filter((c) => c.id !== id),
     {},
+    () => api.patch("/api/roster", { kind: "contractor", id, name }),
   );
 }
 
 /* ------------------------------------------------- display order (Sr. No.) */
 
 export function setContractorSrNo(id: string, srNo: number): void {
-  commit({
-    ...current,
-    contractors: current.contractors.map((c) => (c.id === id ? { ...c, srNo } : c)),
-    isSample: false,
-  });
+  optimistic(
+    {
+      ...current,
+      contractors: current.contractors.map((c) => (c.id === id ? { ...c, srNo } : c)),
+    },
+    () => api.patch("/api/roster", { kind: "contractor", id, srNo }),
+  );
 }
 
 export function setCategorySrNo(category: string, srNo: number): void {
-  commit({
-    ...current,
-    categoryOrder: { ...current.categoryOrder, [category]: srNo },
-    isSample: false,
-  });
+  optimistic({ ...current, categoryOrder: { ...current.categoryOrder, [category]: srNo } }, () =>
+    api.patch("/api/roster", { kind: "category", category, srNo }),
+  );
 }
 
 export function setTypeSrNo(category: string, type: string, srNo: number): void {
-  commit({
-    ...current,
-    typeOrder: { ...current.typeOrder, [typeKey(category, type)]: srNo },
-    isSample: false,
-  });
+  optimistic(
+    { ...current, typeOrder: { ...current.typeOrder, [typeKey(category, type)]: srNo } },
+    () => api.patch("/api/roster", { kind: "type", category, type, srNo }),
+  );
 }
 
+/* ------------------------------------------------------------- entries */
+
 /**
- * Save one day's manpower. Contractors left blank are recorded as "not
- * entered" (no row) rather than zero, so an unfilled form never reads as
- * nobody turning up.
- *
- * Only the contractors present in `actuals` are touched. That scoping is what
- * lets a contractor save their own row without wiping everyone else's for the
- * same day.
+ * Save one day. Only the contractors in `actuals` are touched, which is what
+ * lets one person save their own rows without clearing anyone else's; a null
+ * is a delete, keeping "not entered" distinct from a reported zero.
  */
 export function saveDay(date: string, actuals: Map<string, number | null>): void {
   const scope = new Set(actuals.keys());
-  const untouched = current.entries.filter((e) => e.date !== date || !scope.has(e.contractorId));
+  const untouched = current.entries.filter(
+    (e) => e.date !== date || !scope.has(e.contractorId),
+  );
   const saved: DailyEntry[] = [];
-  actuals.forEach((actual, contractorId) => {
-    if (actual != null) saved.push({ date, contractorId, actual });
+  actuals.forEach((actual, id) => {
+    if (actual != null) saved.push({ date, contractorId: id, actual });
   });
-  commit({ ...current, entries: [...untouched, ...saved], isSample: false });
+
+  optimistic({ ...current, entries: [...untouched, ...saved] }, () =>
+    api.put("/api/entries", { date, actuals: Object.fromEntries(actuals) }),
+  );
 }
 
-export function resetToSample(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* nothing to clean up */
+/* --------------------------------------------------------------- import */
+
+/** Replace the roster wholesale, as a sheet import does. */
+export async function replaceRoster(contractors: Contractor[]): Promise<void> {
+  // Send the rows the server does not have yet, one at a time: the import is
+  // rare and a partial failure should leave the rows that did land.
+  const existing = new Set(current.contractors.map((c) => c.id));
+  for (const c of contractors) {
+    if (existing.has(c.id)) continue;
+    await api
+      .post("/api/roster", {
+        category: c.category,
+        type: c.type,
+        name: c.name,
+        committed: c.committed,
+      })
+      .catch((err) => console.error(`import: ${c.name} rejected`, err));
   }
-  current = SAMPLE_DATA;
-  listeners.forEach((l) => l());
+  await reload();
 }

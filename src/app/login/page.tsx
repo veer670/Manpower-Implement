@@ -20,11 +20,14 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const result = await auth.signIn(username, password);
-      if (result) router.push("/entry");
-      // One message for both a wrong ID and a wrong password — naming which
-      // was wrong tells an outsider which IDs exist.
-      else setError("That user ID and password do not match.");
+      const next = await auth.signIn(username, password);
+      // The office and an admin land on the dashboard; a contractor has only
+      // their own row to fill in.
+      router.push(next.role === "contractor" ? "/entry" : "/");
+    } catch (err) {
+      // The server returns one message for a wrong ID and a wrong password
+      // alike — naming which was wrong tells an outsider which IDs exist.
+      setError(err instanceof Error ? err.message : "Could not sign in.");
     } finally {
       setBusy(false);
     }
@@ -37,10 +40,10 @@ export default function LoginPage() {
           Signed in as <span className="font-semibold text-ink">{session.username}</span>.
         </p>
         <Link
-          href="/entry"
+          href={session.role === "contractor" ? "/entry" : "/"}
           className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
         >
-          Enter my manpower
+          Continue
         </Link>
       </div>
     );
@@ -54,8 +57,8 @@ export default function LoginPage() {
         </span>
         <h1 className="mt-4 text-xl font-semibold tracking-tight text-ink">Sign in</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Use the user ID and password the site office gave you — whether you manage a
-          category or report for one contractor.
+          Use the user ID and password the site office gave you — whether you run the site,
+          manage a category, or report for one contractor.
         </p>
       </div>
 
@@ -98,10 +101,7 @@ export default function LoginPage() {
       </form>
 
       <p className="mt-4 text-center text-xs text-ink-muted">
-        Site office?{" "}
-        <Link href="/" className="underline underline-offset-2 hover:text-ink-secondary">
-          Go to the dashboard
-        </Link>
+        Lost your password? The site office can reset it under More.
       </p>
     </div>
   );

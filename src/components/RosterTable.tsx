@@ -14,7 +14,6 @@ import {
   setTypeSrNo,
   upsertContractor,
 } from "@/lib/dataset";
-import { pruneUsers, remapCategory, remapUsers } from "@/lib/auth";
 import { num } from "@/lib/format";
 import { categoriesOf, contractorsOf, typesOf } from "@/lib/metrics";
 import { useStore } from "@/lib/store";
@@ -52,9 +51,6 @@ export default function RosterTable() {
   const types = liveCategory ? typesOf(data, liveCategory) : [];
   const liveType = liveCategory && type && types.some((t) => t.name === type) ? type : null;
 
-  function prune(remaining: Contractor[]) {
-    pruneUsers(new Set(remaining.map((c) => c.id)));
-  }
 
   const addButton = (
     <button
@@ -101,14 +97,11 @@ export default function RosterTable() {
           onSelect={setCategory}
           onDelete={(c) => {
             removeCategory(c);
-            prune(data.contractors.filter((x) => x.category !== c));
           }}
           onSrNo={setCategorySrNo}
           onRename={(from, to) => {
             const map = renameCategory(from, to);
             if (map.size === 0) return false;
-            remapUsers(map);
-            remapCategory(from, to);
             setCategory(to);
             return true;
           }}
@@ -138,13 +131,11 @@ export default function RosterTable() {
           onSelect={setType}
           onDelete={(t) => {
             removeType(liveCategory, t);
-            prune(data.contractors.filter((x) => !(x.category === liveCategory && x.type === t)));
           }}
           onSrNo={(t, n) => setTypeSrNo(liveCategory, t, n)}
           onRename={(from, to) => {
             const map = renameType(liveCategory, from, to);
             if (map.size === 0) return false;
-            remapUsers(map);
             setType(to);
             return true;
           }}
@@ -168,7 +159,6 @@ export default function RosterTable() {
 
   function remove(c: Contractor) {
     removeContractor(c.id);
-    prune(data.contractors.filter((x) => x.id !== c.id));
   }
 
   return (
@@ -208,9 +198,7 @@ export default function RosterTable() {
                   onCancel={() => setEditingId(null)}
                   onRename={(to) => {
                     const map = renameContractor(c.id, to);
-                    if (map.size === 0) return false;
-                    remapUsers(map);
-                    return true;
+                    return map.size > 0;
                   }}
                 />
               </div>

@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import AppGate from "./AppGate";
 import * as auth from "@/lib/auth";
 import { useAccess, useSession } from "@/lib/useAuth";
 import { useStore } from "@/lib/store";
@@ -92,12 +93,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="rounded-lg border border-hairline bg-surface-2 p-3">
               <p className="text-[11px] font-medium text-ink-muted">Signed in</p>
               <p className="mt-1 truncate text-xs font-semibold text-ink">
-                {session.role === "admin" ? session.username : (contractor?.name ?? session.username)}
+                {session.role === "contractor"
+                  ? (contractor?.name ?? session.username)
+                  : session.username}
               </p>
               <p className="mt-0.5 truncate text-[11px] text-ink-secondary">
-                {session.role === "admin"
-                  ? `Admin · ${session.category ?? "All categories"}`
-                  : `${contractor?.category ?? ""} / ${contractor?.type ?? ""}`}
+                {session.role === "office"
+                  ? "Site office"
+                  : session.role === "admin"
+                    ? `Admin · ${session.category ?? "All categories"}`
+                    : `${contractor?.category ?? ""} / ${contractor?.type ?? ""}`}
               </p>
               <button
                 onClick={() => auth.signOut()}
@@ -174,7 +179,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <ThemeToggle />
         </header>
 
-        <main className="min-w-0 flex-1 p-5">{children}</main>
+        <main className="min-w-0 flex-1 p-5">
+          <AppGate>{children}</AppGate>
+        </main>
       </div>
     </div>
   );

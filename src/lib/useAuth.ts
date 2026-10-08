@@ -1,62 +1,35 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import * as auth from "./auth";
 
-/** The signed-in contractor, or null when nobody is signed in (admin view). */
-export function useSession(): auth.Session | null {
-  return useSyncExternalStore(auth.subscribe, auth.getSession, auth.getServerSession);
-}
-
-export function useUsers(): auth.User[] {
-  return useSyncExternalStore(auth.subscribe, auth.getUsers, auth.getServerUsers);
-}
-
 /**
- * What the current session may see and do.
+ * Who is signed in, and what they may do.
  *
- * Nobody signed in is the site office — full access, no password, because one
- * nobody can enforce would be theatre. An admin login is the same minus the
- * login list, and confined to its category. A contractor gets its own row.
+ * Everything here is the server's answer, re-fetched rather than inferred:
+ * the client decides what to *render*, the server decides what is *allowed*.
  */
-export type Access = {
-  /** Nobody signed in. */
-  isOffice: boolean;
-  /** Office or an admin login. */
-  canManageRoster: boolean;
-  /** Office only. */
-  canManageLogins: boolean;
-  /** Null means every category. */
-  category: string | null;
-  /** Set only for a contractor login. */
-  contractorId: string | null;
-};
+export function useAccess(): auth.Access {
+  return useSyncExternalStore(auth.subscribe, auth.getAccess, auth.getServerAccess);
+}
 
-export function useAccess(): Access {
-  const session = useSession();
-  if (!session) {
-    return {
-      isOffice: true,
-      canManageRoster: true,
-      canManageLogins: true,
-      category: null,
-      contractorId: null,
-    };
-  }
-  if (session.role === "admin") {
-    return {
-      isOffice: false,
-      canManageRoster: true,
-      canManageLogins: false,
-      category: session.category ?? null,
-      contractorId: null,
-    };
-  }
-  return {
-    isOffice: false,
-    canManageRoster: false,
-    canManageLogins: false,
-    category: null,
-    contractorId: session.contractorId ?? null,
-  };
+export function useSession(): auth.Session | null {
+  return useAccess().session;
+}
+
+/** False until the first /api/auth/me has answered, so screens can wait. */
+export function useAuthReady(): boolean {
+  return useSyncExternalStore(auth.subscribe, auth.isReady, () => false);
+}
+
+/** The login list, loaded on demand by the screen that shows it. */
+export function useUsers(): auth.User[] {
+  const users = useSyncExternalStore(auth.subscribe, auth.getUsers, auth.getServerUsers);
+  const canManage = useAccess().canManageLogins;
+
+  useEffect(() => {
+    if (canManage) void auth.loadUsers();
+  }, [canManage]);
+
+  return users;
 }

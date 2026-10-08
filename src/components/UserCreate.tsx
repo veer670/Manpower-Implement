@@ -39,7 +39,7 @@ export default function UserCreate() {
   );
   const available = data.contractors.filter((c) => !withLogin.has(c.id));
   const chosen = data.contractors.find((c) => c.id === contractorId);
-  const nameFor = (id?: string) => data.contractors.find((c) => c.id === id);
+  const nameFor = (id?: string | null) => data.contractors.find((c) => c.id === id);
 
   function switchKind(next: Kind) {
     setKind(next);

@@ -1,16 +1,9 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { fail as respondFail } from "@/server/respond";
 import { HttpError, requireSession } from "@/server/auth";
 import { db } from "@/server/db";
 import { contractors, entries } from "@/server/schema";
-
-function fail(err: unknown) {
-  if (err instanceof HttpError) {
-    return NextResponse.json({ error: err.message }, { status: err.status });
-  }
-  console.error("entries route:", err);
-  return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
-}
 
 /** The contractor ids this login may read or write. null means all of them. */
 async function scopeIds(
@@ -52,7 +45,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ entries: rows });
   } catch (err) {
-    return fail(err);
+    return respondFail("entries route", err);
   }
 }
 
@@ -99,6 +92,6 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ ok: true, written: rows.length });
   } catch (err) {
-    return fail(err);
+    return respondFail("entries route", err);
   }
 }

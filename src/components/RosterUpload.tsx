@@ -5,13 +5,11 @@ import {
   CheckCircle2,
   Download,
   FileSpreadsheet,
-  RotateCcw,
   TriangleAlert,
   Upload,
 } from "lucide-react";
 import { parseRoster } from "@/lib/parse";
-import { replaceRoster, resetToSample, saveDay } from "@/lib/dataset";
-import { pruneUsers } from "@/lib/auth";
+import { replaceRoster, saveDay } from "@/lib/dataset";
 import { longDate, num } from "@/lib/format";
 import { rosterCsv } from "@/lib/sample";
 import { useStore } from "@/lib/store";
@@ -41,9 +39,9 @@ export default function RosterUpload() {
       if (result.contractors.length === 0) {
         setError(result.warnings.join(" ") || "No contractor rows found in that file.");
       } else {
-        replaceRoster(result.contractors, file.name);
-        // Logins for contractors the new sheet dropped have nothing to enter.
-        pruneUsers(new Set(result.contractors.map((c) => c.id)));
+        // The server adds the rows it does not already have; logins for
+        // contractors that went cascade on the database side.
+        await replaceRoster(result.contractors);
         // A sheet that also carries the day's figures is filed against today,
         // which is what a freshly exported register is.
         if (result.hadActualColumn && result.actuals.size > 0 && today) {
@@ -133,20 +131,6 @@ export default function RosterUpload() {
             <Download size={14} strokeWidth={2.4} aria-hidden />
             Download as sheet
           </button>
-          {!data.isSample && (
-            <button
-              onClick={() => {
-                resetToSample();
-                setNote(null);
-                setWarnings([]);
-                setError(null);
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
-            >
-              <RotateCcw size={14} strokeWidth={2.4} aria-hidden />
-              Back to sample
-            </button>
-          )}
         </div>
 
         <input

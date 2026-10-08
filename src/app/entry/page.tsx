@@ -16,7 +16,6 @@ import {
   setCategorySrNo,
   setTypeSrNo,
 } from "@/lib/dataset";
-import { remapCategory, remapUsers } from "@/lib/auth";
 import { useStore } from "@/lib/store";
 import { useAccess } from "@/lib/useAuth";
 import * as todayStore from "@/lib/today";
@@ -186,9 +185,6 @@ export default function EntryPage() {
             onRename={(from, to) => {
               const map = renameCategory(from, to);
               if (map.size === 0) return false;
-              // Ids are derived from the name, so logins have to follow it.
-              remapUsers(map);
-              remapCategory(from, to);
               setCategory(to);
               return true;
             }}
@@ -217,7 +213,6 @@ export default function EntryPage() {
             onRename={(from, to) => {
               const map = renameType(liveCategory, from, to);
               if (map.size === 0) return false;
-              remapUsers(map);
               setType(to);
               return true;
             }}

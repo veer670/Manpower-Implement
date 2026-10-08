@@ -8,7 +8,6 @@ import {
   saveDay,
   setContractorSrNo,
 } from "@/lib/dataset";
-import { pruneUsers, remapUsers } from "@/lib/auth";
 import { num, pct, signed } from "@/lib/format";
 import { fillRate, type DayRow } from "@/lib/metrics";
 import StatusChip from "./StatusChip";
@@ -170,9 +169,7 @@ export default function EntryForm({
                                 onCancel={() => setEditingId(null)}
                                 onRename={(to) => {
                                   const map = renameContractor(r.id, to);
-                                  if (map.size === 0) return false;
-                                  remapUsers(map);
-                                  return true;
+                                  return map.size > 0;
                                 }}
                               />
                             ) : (
@@ -232,13 +229,7 @@ export default function EntryForm({
                           <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
                           <DeleteButton
                             label={`${r.name} from the roster`}
-                            onConfirm={() => {
-                              removeContractor(r.id);
-                              // Its login would otherwise point at nothing.
-                              pruneUsers(
-                                new Set(rows.filter((x) => x.id !== r.id).map((x) => x.id)),
-                              );
-                            }}
+                            onConfirm={() => removeContractor(r.id)}
                           />
                         </div>
                       )}

@@ -1,5 +1,6 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { fail as respondFail } from "@/server/respond";
 import { assertCategory, HttpError, requireRoster, requireSession } from "@/server/auth";
 import { db } from "@/server/db";
 import { contractors, displayOrder, entries } from "@/server/schema";
@@ -12,14 +13,6 @@ import { contractorId, typeKey } from "@/lib/types";
  * check an admin login depends on is easy to forget when it has to be repeated
  * across a dozen route files, and forgetting it once is the whole bug.
  */
-
-function fail(err: unknown) {
-  if (err instanceof HttpError) {
-    return NextResponse.json({ error: err.message }, { status: err.status });
-  }
-  console.error("roster route:", err);
-  return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
-}
 
 /** GET — the roster this login may see. */
 export async function GET() {
@@ -44,7 +37,7 @@ export async function GET() {
       ),
     });
   } catch (err) {
-    return fail(err);
+    return respondFail("roster route", err);
   }
 }
 
@@ -99,7 +92,7 @@ export async function POST(request: Request) {
     await db.insert(contractors).values(row);
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    return fail(err);
+    return respondFail("roster route", err);
   }
 }
 
@@ -253,7 +246,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ type: name ?? body.type });
   } catch (err) {
-    return fail(err);
+    return respondFail("roster route", err);
   }
 }
 
@@ -323,6 +316,6 @@ export async function DELETE(request: Request) {
       );
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return fail(err);
+    return respondFail("roster route", err);
   }
 }
