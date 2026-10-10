@@ -240,7 +240,7 @@ export default function EntryPage() {
       )}
 
       {level === "type" && liveCategory && (
-        <Card title="Contractor Name" subtitle={liveCategory} actions={headerControls}>
+        <Card actions={headerControls}>
           {assignPanel}
           {quickAdd}
           {back("Department Name", () => setCategory(null))}
