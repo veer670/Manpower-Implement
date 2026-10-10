@@ -202,9 +202,9 @@ export default function EntryPage() {
               {contractor?.type}. Your committed headcount is {contractor?.committed}.
             </>
           ) : level === "category" ? (
-            <>Pick a category, then a contractor type, then fill in today&rsquo;s manpower.</>
+            <>Pick a department, then a contractor, then fill in today&rsquo;s manpower.</>
           ) : level === "type" ? (
-            <>Pick a contractor type within {liveCategory}.</>
+            <>Pick a contractor within {liveCategory}.</>
           ) : (
             <>Contractor name and committed headcount come from the roster.</>
           )}
@@ -212,7 +212,7 @@ export default function EntryPage() {
       </div>
 
       {level === "category" && (
-        <Card title="Manpower Details" actions={headerControls}>
+        <Card title="Department Name" actions={headerControls}>
           {assignPanel}
           {quickAdd}
           <ListPicker
@@ -240,10 +240,10 @@ export default function EntryPage() {
       )}
 
       {level === "type" && liveCategory && (
-        <Card title={liveCategory} subtitle="Contractor types" actions={headerControls}>
+        <Card title="Contractor Name" subtitle={liveCategory} actions={headerControls}>
           {assignPanel}
           {quickAdd}
-          {back("Manpower Details", () => setCategory(null))}
+          {back("Department Name", () => setCategory(null))}
           <ListPicker
             items={types}
             onSelect={setType}

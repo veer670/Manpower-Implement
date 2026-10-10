@@ -125,7 +125,7 @@ export default function RosterTable() {
       <div className="space-y-4">
         <div className="flex justify-end">{addButton}</div>
         {quickAdd}
-        {back("Manpower Details", () => setCategory(null))}
+        {back("Department Name", () => setCategory(null))}
         <ListPicker
           items={types}
           onSelect={setType}
