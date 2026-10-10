@@ -11,6 +11,7 @@ export async function GET() {
       canManageRoster: access.canManageRoster,
       canManageLogins: access.canManageLogins,
       category: access.category,
+    type: access.type,
       contractorId: access.contractorId,
     });
   } catch (err) {

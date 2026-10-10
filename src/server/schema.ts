@@ -80,7 +80,11 @@ export const users = pgTable("users", {
     onDelete: "cascade",
     onUpdate: "cascade",
   }),
+  /** role "admin": the category it oversees, or null for all of them. */
   category: text("category"),
+  /** role "admin": narrows it further to one contractor type within that
+   *  category. Null means the whole category. */
+  type: text("type"),
   salt: text("salt").notNull(),
   hash: text("hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

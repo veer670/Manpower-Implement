@@ -8,6 +8,7 @@ import { contractors, entries } from "@/server/schema";
 /** The contractor ids this login may read or write. null means all of them. */
 async function scopeIds(
   category: string | null,
+  type: string | null,
   contractorId: string | null,
 ): Promise<string[] | null> {
   if (contractorId) return [contractorId];
@@ -16,7 +17,11 @@ async function scopeIds(
   const rows = await db
     .select({ id: contractors.id })
     .from(contractors)
-    .where(eq(contractors.category, category));
+    .where(
+      type
+        ? and(eq(contractors.category, category), eq(contractors.type, type))
+        : eq(contractors.category, category),
+    );
   return rows.map((r: { id: string }) => r.id);
 }
 
@@ -29,7 +34,7 @@ export async function GET(request: Request) {
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
 
-    const ids = await scopeIds(access.category, access.contractorId);
+    const ids = await scopeIds(access.category, access.type, access.contractorId);
     if (ids?.length === 0) return NextResponse.json({ entries: [] });
 
     const where = [
@@ -76,7 +81,7 @@ export async function PUT(request: Request) {
     if (ids.length === 0) return NextResponse.json({ ok: true, written: 0 });
 
     // Never trust the client's idea of what it may write.
-    const allowed = await scopeIds(access.category, access.contractorId);
+    const allowed = await scopeIds(access.category, access.type, access.contractorId);
     if (allowed) {
       const permitted = new Set(allowed);
       const refused = ids.filter((id) => !permitted.has(id));

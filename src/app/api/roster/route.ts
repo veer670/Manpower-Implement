@@ -1,7 +1,7 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail as respondFail } from "@/server/respond";
-import { assertCategory, HttpError, requireRoster, requireSession } from "@/server/auth";
+import { assertScope, HttpError, requireRoster, requireSession } from "@/server/auth";
 import { getDb } from "@/server/db";
 import { contractors, displayOrder, entries } from "@/server/schema";
 import { contractorId, typeKey } from "@/lib/types";
@@ -21,7 +21,17 @@ export async function GET() {
     const access = await requireSession();
 
     const rows = access.category
-      ? await db.select().from(contractors).where(eq(contractors.category, access.category))
+      ? await db
+          .select()
+          .from(contractors)
+          .where(
+            access.type
+              ? and(
+                  eq(contractors.category, access.category),
+                  eq(contractors.type, access.type),
+                )
+              : eq(contractors.category, access.category),
+          )
       : access.contractorId
         ? await db.select().from(contractors).where(eq(contractors.id, access.contractorId))
         : await db.select().from(contractors);
@@ -66,7 +76,7 @@ export async function POST(request: Request) {
     if (!Number.isFinite(committed) || committed < 0) {
       throw new HttpError(400, "Committed must be a number.");
     }
-    assertCategory(access, category);
+    assertScope(access, category, type);
 
     const id = contractorId(category, type, name);
     const [clash] = await db
@@ -117,7 +127,7 @@ export async function PATCH(request: Request) {
         .where(eq(contractors.id, body.id))
         .limit(1);
       if (!row) throw new HttpError(404, "No such contractor.");
-      assertCategory(access, row.category);
+      assertScope(access, row.category, row.type);
 
       const name = body.name?.trim();
       // The id is derived from the name, so a rename mints a new one. The
@@ -146,7 +156,7 @@ export async function PATCH(request: Request) {
     }
 
     if (body.kind === "category") {
-      assertCategory(access, body.category);
+      assertScope(access, body.category);
       const name = body.name?.trim();
 
       if (body.srNo != null) {
@@ -202,7 +212,7 @@ export async function PATCH(request: Request) {
     }
 
     // kind === "type"
-    assertCategory(access, body.category);
+    assertScope(access, body.category, body.kind === "type" ? body.type : undefined);
     const name = body.name?.trim();
 
     if (body.srNo != null) {
@@ -272,13 +282,13 @@ export async function DELETE(request: Request) {
         .where(eq(contractors.id, body.id))
         .limit(1);
       if (!row) return NextResponse.json({ ok: true });
-      assertCategory(access, row.category);
+      assertScope(access, row.category, row.type);
       await db.delete(contractors).where(eq(contractors.id, body.id));
       return NextResponse.json({ ok: true });
     }
 
     if (body.kind === "category") {
-      assertCategory(access, body.category);
+      assertScope(access, body.category);
       const doomed = await db
         .select({ id: contractors.id })
         .from(contractors)
@@ -306,7 +316,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    assertCategory(access, body.category);
+    assertScope(access, body.category, body.kind === "type" ? body.type : undefined);
     await db
       .delete(contractors)
       .where(and(eq(contractors.category, body.category), eq(contractors.type, body.type)));

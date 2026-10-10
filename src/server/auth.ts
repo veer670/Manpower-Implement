@@ -49,6 +49,8 @@ export type Session = {
   contractorId: string | null;
   /** Set for role "admin"; null means every category. */
   category: string | null;
+  /** Narrows an admin to one type within its category; null means all of them. */
+  type: string | null;
 };
 
 export async function createSession(username: string): Promise<string> {
@@ -98,7 +100,7 @@ export async function destroySession(): Promise<void> {
  */
 function openAccess(): Session | null {
   if (process.env.REQUIRE_LOGIN === "1") return null;
-  return { username: "office", role: "office", contractorId: null, category: null };
+  return { username: "office", role: "office", contractorId: null, category: null, type: null };
 }
 
 export async function getSession(): Promise<Session | null> {
@@ -115,6 +117,7 @@ export async function getSession(): Promise<Session | null> {
       role: users.role,
       contractorId: users.contractorId,
       category: users.category,
+      type: users.type,
     })
     .from(sessions)
     .innerJoin(users, eq(users.username, sessions.username))
@@ -128,6 +131,7 @@ export async function getSession(): Promise<Session | null> {
     role: row.role as Role,
     contractorId: row.contractorId,
     category: row.category,
+    type: row.type,
   };
 }
 
@@ -141,6 +145,8 @@ export type Access = {
   canManageRoster: boolean;
   /** Null means every category. */
   category: string | null;
+  /** Null means every type within that category. */
+  type: string | null;
   /** Set only for a contractor login. */
   contractorId: string | null;
 };
@@ -152,6 +158,7 @@ export function accessFor(session: Session | null): Access {
       canManageLogins: false,
       canManageRoster: false,
       category: null,
+      type: null,
       contractorId: null,
     };
   }
@@ -161,6 +168,7 @@ export function accessFor(session: Session | null): Access {
       canManageLogins: true,
       canManageRoster: true,
       category: null,
+      type: null,
       contractorId: null,
     };
   }
@@ -170,6 +178,7 @@ export function accessFor(session: Session | null): Access {
       canManageLogins: false,
       canManageRoster: true,
       category: session.category,
+      type: session.type,
       contractorId: null,
     };
   }
@@ -178,6 +187,7 @@ export function accessFor(session: Session | null): Access {
     canManageLogins: false,
     canManageRoster: false,
     category: null,
+    type: null,
     contractorId: session.contractorId,
   };
 }
@@ -219,8 +229,17 @@ export async function requireLogins(): Promise<Access> {
  * every write, because the client's idea of what it may see is a convenience,
  * not a boundary.
  */
-export function assertCategory(access: Access, category: string): void {
+export function assertScope(access: Access, category: string, type?: string): void {
   if (access.category && access.category !== category) {
     throw new HttpError(403, "That category is outside this login's scope.");
   }
+  // A type-scoped admin may only touch its own type. Writes that name no type
+  // (a category rename, say) are refused outright, since they would reach past
+  // the one type this login was given.
+  if (access.type && type !== access.type) {
+    throw new HttpError(403, "That contractor type is outside this login's scope.");
+  }
 }
+
+/** Kept for callers that only know the category. */
+export const assertCategory = assertScope;

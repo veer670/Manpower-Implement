@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, KeyRound, UserPlus } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
 import ListPicker from "@/components/ListPicker";
 import QuickAdd from "@/components/QuickAdd";
+import AssignPanel from "@/components/AssignPanel";
 import { longDate } from "@/lib/format";
 import { allDates, categoriesOf, contractorsOf, rowsForDate, typesOf } from "@/lib/metrics";
 import {
@@ -32,6 +33,7 @@ export default function EntryPage() {
   const [category, setCategory] = useState<string | null>(null);
   const [type, setType] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const date = picked ?? today;
   const dates = useMemo(() => allDates(data.entries), [data.entries]);
@@ -116,18 +118,38 @@ export default function EntryPage() {
     <div className="flex flex-col items-end gap-2">
       {dateControl}
       {access.canManageRoster && (
-        <button
-          onClick={() => setAdding((a) => !a)}
-          aria-expanded={adding}
-          className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-            adding
-              ? "border-accent bg-surface-2 text-ink"
-              : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
-          }`}
-        >
-          <UserPlus size={13} strokeWidth={2.4} aria-hidden />
-          Add contractor
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setAssigning((a) => !a);
+              setAdding(false);
+            }}
+            aria-expanded={assigning}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              assigning
+                ? "border-accent bg-surface-2 text-ink"
+                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+            }`}
+          >
+            <KeyRound size={13} strokeWidth={2.4} aria-hidden />
+            Assign
+          </button>
+          <button
+            onClick={() => {
+              setAdding((a) => !a);
+              setAssigning(false);
+            }}
+            aria-expanded={adding}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              adding
+                ? "border-accent bg-surface-2 text-ink"
+                : "border-hairline bg-surface-2 text-ink-secondary hover:text-ink"
+            }`}
+          >
+            <UserPlus size={13} strokeWidth={2.4} aria-hidden />
+            Add contractor
+          </button>
+        </div>
       )}
     </div>
   );
@@ -139,6 +161,21 @@ export default function EntryPage() {
         presetCategory={liveCategory ?? undefined}
         presetType={liveType ?? undefined}
         onClose={() => setAdding(false)}
+      />
+    ) : null;
+
+  const assignPanel =
+    access.canManageRoster && assigning ? (
+      <AssignPanel
+        key={`${liveCategory ?? "all"}:${liveType ?? "all"}`}
+        category={liveCategory}
+        type={liveType}
+        label={
+          liveType
+            ? `${liveCategory} / ${liveType}`
+            : (liveCategory ?? "every category")
+        }
+        onClose={() => setAssigning(false)}
       />
     ) : null;
 
@@ -176,6 +213,7 @@ export default function EntryPage() {
 
       {level === "category" && (
         <Card title="Manpower Details" actions={headerControls}>
+          {assignPanel}
           {quickAdd}
           <ListPicker
             items={categories}
@@ -203,6 +241,7 @@ export default function EntryPage() {
 
       {level === "type" && liveCategory && (
         <Card title={liveCategory} subtitle="Contractor types" actions={headerControls}>
+          {assignPanel}
           {quickAdd}
           {back("Manpower Details", () => setCategory(null))}
           <ListPicker
@@ -236,6 +275,7 @@ export default function EntryPage() {
           }
           actions={headerControls}
         >
+          {assignPanel}
           {quickAdd}
           {access.canManageRoster && liveCategory && back(liveCategory, () => setType(null))}
 

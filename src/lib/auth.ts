@@ -15,6 +15,8 @@ export type Session = {
   contractorId?: string | null;
   /** role "admin"; null means every category */
   category?: string | null;
+  /** role "admin"; null means every type within that category */
+  type?: string | null;
 };
 
 export type User = {
@@ -22,6 +24,8 @@ export type User = {
   role: UserRole;
   contractorId: string | null;
   category: string | null;
+  /** Narrows an admin to one type within its category. */
+  type: string | null;
   createdAt: string;
 };
 
@@ -30,6 +34,8 @@ export type Access = {
   canManageRoster: boolean;
   canManageLogins: boolean;
   category: string | null;
+  /** Null means every type within the category. */
+  type: string | null;
   contractorId: string | null;
 };
 
@@ -38,6 +44,7 @@ const SIGNED_OUT: Access = {
   canManageRoster: false,
   canManageLogins: false,
   category: null,
+  type: null,
   contractorId: null,
 };
 
@@ -118,6 +125,7 @@ export async function createAdminUser(
   username: string,
   password: string,
   category: string | null,
+  type: string | null = null,
 ): Promise<{ username: string; password: string }> {
   const issued = await api.post<{ username: string; password: string }>("/api/users", {
     action: "create",
@@ -125,6 +133,7 @@ export async function createAdminUser(
     username,
     password,
     category,
+    type,
   });
   await loadUsers();
   return issued;

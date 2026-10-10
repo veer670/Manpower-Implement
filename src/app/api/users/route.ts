@@ -31,6 +31,7 @@ export async function GET() {
         role: users.role,
         contractorId: users.contractorId,
         category: users.category,
+        type: users.type,
         createdAt: users.createdAt,
       })
       .from(users);
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       role?: "admin" | "contractor";
       contractorId?: string | null;
       category?: string | null;
+      type?: string | null;
     };
 
     const username = normalise(body.username ?? "");
@@ -101,6 +103,7 @@ export async function POST(request: Request) {
       username,
       role: "admin",
       category: body.category?.trim() || null,
+      type: body.type?.trim() || null,
       salt,
       hash,
     });
