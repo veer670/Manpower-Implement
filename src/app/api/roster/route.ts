@@ -2,7 +2,7 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail as respondFail } from "@/server/respond";
 import { assertCategory, HttpError, requireRoster, requireSession } from "@/server/auth";
-import { db } from "@/server/db";
+import { getDb } from "@/server/db";
 import { contractors, displayOrder, entries } from "@/server/schema";
 import { contractorId, typeKey } from "@/lib/types";
 
@@ -17,6 +17,7 @@ import { contractorId, typeKey } from "@/lib/types";
 /** GET — the roster this login may see. */
 export async function GET() {
   try {
+    const db = await getDb();
     const access = await requireSession();
 
     const rows = access.category
@@ -44,6 +45,7 @@ export async function GET() {
 /** POST — add a contractor, creating its category and type by implication. */
 export async function POST(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireRoster();
     const body = (await request.json()) as {
       category?: string;
@@ -104,6 +106,7 @@ type Patch =
 /** PATCH — rename or reorder at any of the three levels. */
 export async function PATCH(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireRoster();
     const body = (await request.json()) as Patch;
 
@@ -258,6 +261,7 @@ type Remove =
 /** DELETE — remove at any level. Entries cascade; the client confirms first. */
 export async function DELETE(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireRoster();
     const body = (await request.json()) as Remove;
 

@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail as respondFail } from "@/server/respond";
 import { hashPassword, HttpError, requireLogins } from "@/server/auth";
-import { db } from "@/server/db";
+import { getDb } from "@/server/db";
 import { contractors, users } from "@/server/schema";
 
 /** Lowercase, no exotic characters — these get typed on a phone. */
@@ -23,6 +23,7 @@ const generatePassword = (len = 10) =>
 /** GET — the login list. Never returns salts or hashes. */
 export async function GET() {
   try {
+    const db = await getDb();
     await requireLogins();
     const rows = await db
       .select({
@@ -42,6 +43,7 @@ export async function GET() {
 /** POST — issue a login, or reset one's password. */
 export async function POST(request: Request) {
   try {
+    const db = await getDb();
     await requireLogins();
     const body = (await request.json()) as {
       action?: "create" | "reset";
@@ -111,6 +113,7 @@ export async function POST(request: Request) {
 /** DELETE — revoke a login. Its sessions cascade with it. */
 export async function DELETE(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireLogins();
     const body = (await request.json()) as { username?: string };
     const username = normalise(body.username ?? "");

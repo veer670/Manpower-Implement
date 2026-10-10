@@ -2,7 +2,7 @@ import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { and, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { db } from "./db";
+import { getDb } from "./db";
 import { sessions, users } from "./schema";
 
 const scrypt = promisify(scryptCb) as (
@@ -54,6 +54,7 @@ export type Session = {
 export async function createSession(username: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const db = await getDb();
   await db.insert(sessions).values({ token, username, expiresAt });
 
   const jar = await cookies();
@@ -70,7 +71,10 @@ export async function createSession(username: string): Promise<string> {
 export async function destroySession(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) await db.delete(sessions).where(eq(sessions.token, token));
+  if (token) {
+    const db = await getDb();
+    await db.delete(sessions).where(eq(sessions.token, token));
+  }
   jar.delete(SESSION_COOKIE);
 }
 
@@ -80,26 +84,31 @@ export async function destroySession(): Promise<void> {
  * revokes the session immediately.
  */
 /**
- * On a developer's own machine, skip the login.
+ * Open access.
  *
- * Gated on NODE_ENV === "development", which only `next dev` sets: `next
- * build`, `next start` and every Vercel deployment are "production", so this
- * cannot reach a deployed site however the code is bundled. Set
- * REQUIRE_LOGIN=1 in .env.local to exercise the real flow locally.
+ * Nobody is asked to sign in: anyone who opens the app is the site office,
+ * with the run of it. That is a deliberate choice for an internal tool on a
+ * link shared with the site team — and it does mean anyone who has the URL
+ * can read and change the manpower data.
+ *
+ * Set REQUIRE_LOGIN=1 to turn the login back on. Everything behind it — the
+ * accounts, the category-scoped admin, the per-contractor rows — is still
+ * here and still enforced on the server; it is only the requirement that is
+ * lifted.
  */
-function localBypass(): Session | null {
-  if (process.env.NODE_ENV !== "development") return null;
+function openAccess(): Session | null {
   if (process.env.REQUIRE_LOGIN === "1") return null;
-  return { username: "localhost", role: "office", contractorId: null, category: null };
+  return { username: "office", role: "office", contractorId: null, category: null };
 }
 
 export async function getSession(): Promise<Session | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  // Before the query, so localhost needs no session row — and no database — to
-  // get past the door.
-  if (!token) return localBypass();
+  // Ahead of the query, so an open install needs neither a session row nor a
+  // database to get past the door.
+  if (!token) return openAccess();
 
+  const db = await getDb();
   const rows = await db
     .select({
       username: users.username,
@@ -113,7 +122,7 @@ export async function getSession(): Promise<Session | null> {
     .limit(1);
 
   const row = rows[0];
-  if (!row) return localBypass();
+  if (!row) return openAccess();
   return {
     username: row.username,
     role: row.role as Role,

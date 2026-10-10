@@ -2,11 +2,12 @@ import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail } from "@/server/respond";
 import { createSession, verifyPassword } from "@/server/auth";
-import { db } from "@/server/db";
+import { getDb } from "@/server/db";
 import { users } from "@/server/schema";
 
 export async function POST(request: Request) {
   try {
+    const db = await getDb();
     const body = (await request.json().catch(() => null)) as {
       username?: string;
       password?: string;

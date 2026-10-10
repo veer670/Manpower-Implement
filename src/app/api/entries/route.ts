@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { fail as respondFail } from "@/server/respond";
 import { HttpError, requireSession } from "@/server/auth";
-import { db } from "@/server/db";
+import { getDb } from "@/server/db";
 import { contractors, entries } from "@/server/schema";
 
 /** The contractor ids this login may read or write. null means all of them. */
@@ -12,16 +12,18 @@ async function scopeIds(
 ): Promise<string[] | null> {
   if (contractorId) return [contractorId];
   if (!category) return null;
+  const db = await getDb();
   const rows = await db
     .select({ id: contractors.id })
     .from(contractors)
     .where(eq(contractors.category, category));
-  return rows.map((r) => r.id);
+  return rows.map((r: { id: string }) => r.id);
 }
 
 /** GET /api/entries?from=YYYY-MM-DD&to=YYYY-MM-DD */
 export async function GET(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireSession();
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
@@ -59,6 +61,7 @@ export async function GET(request: Request) {
  */
 export async function PUT(request: Request) {
   try {
+    const db = await getDb();
     const access = await requireSession();
     const body = (await request.json()) as {
       date?: string;
