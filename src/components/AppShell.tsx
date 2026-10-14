@@ -56,14 +56,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-full">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-hairline bg-surface-1 p-4 lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar p-4 lg:flex">
         <div className="flex items-center gap-2 px-1 py-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-accent text-[#1f1e1b]">
             <HardHat size={17} strokeWidth={2.2} aria-hidden />
           </span>
           <div className="leading-tight">
-            <p className="text-sm font-semibold text-ink">Manpower</p>
-            <p className="text-[11px] text-ink-muted">Implementation</p>
+            <p className="text-sm font-semibold text-sidebar-text">Manpower</p>
+            <p className="text-[11px] text-sidebar-faint">Implementation</p>
           </div>
         </div>
 
@@ -77,8 +77,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                   active
-                    ? "bg-surface-2 font-semibold text-ink"
-                    : "text-ink-secondary hover:bg-surface-2 hover:text-ink"
+                    ? "bg-sidebar-active font-semibold text-sidebar-text"
+                    : "text-sidebar-muted hover:bg-sidebar-active hover:text-sidebar-text"
                 }`}
               >
                 <Icon size={16} strokeWidth={2} aria-hidden />
@@ -90,14 +90,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="mt-auto space-y-2">
           {session ? (
-            <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-              <p className="text-[11px] font-medium text-ink-muted">Signed in</p>
-              <p className="mt-1 truncate text-xs font-semibold text-ink">
+            <div className="rounded-lg bg-sidebar-active p-3">
+              <p className="text-[11px] font-medium text-sidebar-faint">Signed in</p>
+              <p className="mt-1 truncate text-xs font-semibold text-sidebar-text">
                 {session.role === "contractor"
                   ? (contractor?.name ?? session.username)
                   : session.username}
               </p>
-              <p className="mt-0.5 truncate text-[11px] text-ink-secondary">
+              <p className="mt-0.5 truncate text-[11px] text-sidebar-muted">
                 {session.role === "office"
                   ? "Site office"
                   : session.role === "admin"
@@ -106,7 +106,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </p>
               <button
                 onClick={() => auth.signOut()}
-                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-2 py-1.5 text-xs font-semibold text-ink-secondary hover:text-ink"
+                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-md bg-sidebar px-2 py-1.5 text-xs font-semibold text-sidebar-muted hover:text-sidebar-text"
               >
                 <LogOut size={13} strokeWidth={2.3} aria-hidden />
                 Sign out
@@ -114,18 +114,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           ) : (
             <>
-              <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-[11px] font-medium text-ink-muted">Roster</p>
-                <p className="mt-1 truncate text-xs font-semibold text-ink" title={data.source}>
+              <div className="rounded-lg bg-sidebar-active p-3">
+                <p className="text-[11px] font-medium text-sidebar-faint">Roster</p>
+                <p className="mt-1 truncate text-xs font-semibold text-sidebar-text" title={data.source}>
                   {data.source}
                 </p>
-                <p className="mt-0.5 text-[11px] text-ink-secondary">
+                <p className="mt-0.5 text-[11px] text-sidebar-muted">
                   {num(data.contractors.length)} contractors
                 </p>
               </div>
               <Link
                 href="/login"
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-hairline bg-surface-2 px-2 py-2 text-xs font-semibold text-ink-secondary hover:text-ink"
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-sidebar-active px-2 py-2 text-xs font-semibold text-sidebar-muted hover:text-sidebar-text"
               >
                 <LogIn size={13} strokeWidth={2.3} aria-hidden />
                 Sign in

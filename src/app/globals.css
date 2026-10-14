@@ -19,6 +19,16 @@
   --gridline:       #e6e0d4;
   --axis:           #c9c0ad;
 
+  /* The sidebar is dark in both themes: it separates navigation from the work
+     area without a border doing the job, and gives the cream canvas an edge
+     to sit against. */
+  --sidebar:        #1f1e1b;
+  --sidebar-text:   #f5efe4;
+  --sidebar-muted:  #a8a399;
+  --sidebar-faint:  #6e6a62;
+  --sidebar-active: #2e2b25;
+  --sidebar-accent: #d8a24e;
+
   /* UI accent — bronze. Deliberately NOT a chart series colour: chrome and
      data must not share a hue, or a button starts looking like a series.
      White on --accent is 5.00:1; --accent-text on the plane is 5.39:1. */
@@ -101,6 +111,12 @@
   --color-ink:            var(--text-primary);
   --color-ink-secondary:  var(--text-secondary);
   --color-ink-muted:      var(--text-muted);
+  --color-sidebar:        var(--sidebar);
+  --color-sidebar-text:   var(--sidebar-text);
+  --color-sidebar-muted:  var(--sidebar-muted);
+  --color-sidebar-faint:  var(--sidebar-faint);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-accent: var(--sidebar-accent);
   --color-accent:         var(--accent);
   --color-accent-text:    var(--accent-text);
   --color-series-1:       var(--series-1);

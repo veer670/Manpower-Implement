@@ -9,8 +9,8 @@ import {
   setContractorSrNo,
 } from "@/lib/dataset";
 import { num, pct, signed } from "@/lib/format";
-import { fillRate, type DayRow } from "@/lib/metrics";
-import StatusChip from "./StatusChip";
+import { fillRate, severityForFillRate, severityLabel, type DayRow } from "@/lib/metrics";
+import { SEVERITY_COLOR } from "./StatusChip";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
 import EditableName, { EditButton } from "./EditableName";
@@ -18,7 +18,8 @@ import EditableName, { EditButton } from "./EditableName";
 /**
  * The daily input form. Contractor type, name and committed headcount are
  * master data and read-only here; only today's manpower is editable, which is
- * the one thing the user fills in each day.
+ * the one thing the user fills in each day — so it is the heaviest element on
+ * the row, and every other figure is quieter than it.
  *
  * Mount this with `key={date}` so switching day re-seeds the draft — no effect
  * needed to sync state to props.
@@ -104,39 +105,29 @@ export default function EntryForm({
     );
   }
 
+  const dayRate = fillRate({ committed: totals.committed, actual: totals.actual });
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-hairline bg-surface-2 px-4 py-3">
-        <span className="flex-1 text-sm font-semibold text-ink">
-          {num(totals.filled)} of {num(rows.length)} entered
-        </span>
-        <Summary label="Committed" value={num(totals.committed)} />
-        <Summary label="Reported" value={num(totals.actual)} />
-        <Summary label="Variance" value={signed(totals.actual - totals.committed)} />
-        <Summary
-          label="Fill rate"
-          value={pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
-        />
+      {/* The day in four figures, at a size that is read rather than squinted at. */}
+      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Metric label="entered">
+          {num(totals.filled)}
+          <span className="text-sm font-normal text-ink-muted">/{num(rows.length)}</span>
+        </Metric>
+        <Metric label="committed">{num(totals.committed)}</Metric>
+        <Metric label="reported">{num(totals.actual)}</Metric>
+        <Metric
+          label="fill rate"
+          // The one place colour raises an alarm, and the figure beside it
+          // always says the same thing in numbers.
+          tone={totals.filled > 0 ? SEVERITY_COLOR[severityForFillRate(dayRate)] : undefined}
+        >
+          {totals.filled > 0 ? pct(dayRate, 0) : "—"}
+        </Metric>
       </div>
 
-      {/* Column labels live here once, not on every card. The widths below are
-          shared with the card columns so the two line up. */}
-      <div className="mb-2 hidden items-center gap-x-5 px-4 lg:flex">
-        <span className="flex-1 basis-44" />
-        <span className={`${W.committed} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
-          Committed
-        </span>
-        <span className={`${W.input} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
-          Today&rsquo;s manpower
-        </span>
-        <span className={`${W.variance} text-right text-[10px] font-semibold uppercase tracking-wider text-ink-muted`}>
-          Variance
-        </span>
-        <span className={W.status} />
-        {canEditRoster && <span className="w-[66px]" />}
-      </div>
-
-      <div className="space-y-5">
+      <div className="space-y-4">
         {blocks.map(([type, block]) => (
           <section key={type}>
             {showTypeColumn && (
@@ -144,109 +135,103 @@ export default function EntryForm({
                 {type}
               </h3>
             )}
-            <ul className="space-y-2">
-              {block.map((r) => {
+
+            <ul className="overflow-hidden rounded-xl border border-hairline bg-surface-1">
+              {block.map((r, i) => {
                 const srNo = rows.indexOf(r) + 1;
                 const value = parsed.get(r.id) ?? null;
+                const variance = value == null ? null : value - r.committed;
                 const rate =
                   value == null ? null : fillRate({ committed: r.committed, actual: value });
+                const severity = severityForFillRate(rate);
 
                 return (
                   <li
                     key={r.id}
-                    className="group overflow-hidden rounded-xl border border-hairline bg-surface-1 transition-colors hover:border-accent/45"
+                    className={`group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2/50 ${
+                      i > 0 ? "border-t border-hairline/50" : ""
+                    }`}
                   >
-                    <div className="flex items-stretch">
-                      <div className="min-w-0 flex-1 px-4 py-3">
-                        {/* Identity and figures, aligned to the header strip. */}
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                          <div className="flex min-w-0 flex-1 basis-44 items-center gap-2">
-                            {canEditRoster ? (
-                              <SrNoInput
-                                value={r.srNo}
-                                placeholder={srNo}
-                                label={r.name}
-                                onChange={(n) => setContractorSrNo(r.id, n)}
-                              />
-                            ) : (
-                              <span className="tnum w-9 shrink-0 text-center text-xs font-medium text-ink-muted">
-                                {r.srNo || srNo}
-                              </span>
-                            )}
-                            {canEditRoster ? (
-                              <EditableName
-                                key={`${r.id}:${editingId === r.id}`}
-                                value={r.name}
-                                label={r.name}
-                                editing={editingId === r.id}
-                                onCancel={() => setEditingId(null)}
-                                onRename={(to) => {
-                                  const map = renameContractor(r.id, to);
-                                  return map.size > 0;
-                                }}
-                              />
-                            ) : (
-                              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-                                {r.name}
-                              </span>
-                            )}
-                          </div>
+                    {/* Status as a bar, not a pill: a column of these is
+                        scannable in a way a column of words is not. The line
+                        under the name still says it in words. */}
+                    <span
+                      role="img"
+                      aria-label={value == null ? "Not entered" : severityLabel[severity]}
+                      className="h-8 w-[3px] shrink-0 rounded-full"
+                      style={{
+                        background: value == null ? "var(--gridline)" : SEVERITY_COLOR[severity],
+                      }}
+                    />
 
-                          <span
-                            className={`${W.committed} tnum text-right text-sm text-ink-secondary`}
-                          >
-                            <Label>Committed</Label>
-                            {num(r.committed)}
-                          </span>
+                    {canEditRoster ? (
+                      <SrNoInput
+                        value={r.srNo}
+                        placeholder={srNo}
+                        label={r.name}
+                        onChange={(n) => setContractorSrNo(r.id, n)}
+                      />
+                    ) : (
+                      <span className="tnum w-6 shrink-0 text-center text-xs text-ink-muted">
+                        {r.srNo || srNo}
+                      </span>
+                    )}
 
-                          <span className={`${W.input} flex items-center justify-end gap-1.5`}>
-                            <Label>Today&rsquo;s</Label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              aria-label={`Manpower reported by ${r.name} under ${r.type}`}
-                              value={draft[r.id] ?? ""}
-                              onChange={(e) => update(r.id, e.target.value)}
-                              placeholder="—"
-                              className="tnum w-full rounded-lg border border-hairline bg-surface-2 px-3 py-2 text-right text-sm font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted hover:border-ink-muted/50 focus:border-accent focus:bg-surface-1 focus:outline-none focus:ring-2 focus:ring-accent/30"
-                            />
-                          </span>
-
-                          <span
-                            className={`${W.variance} tnum text-right text-sm font-medium ${
-                              value != null && value - r.committed < 0
-                                ? "text-[var(--critical)]"
-                                : "text-ink-secondary"
-                            }`}
-                          >
-                            <Label>Variance</Label>
-                            {value == null ? "—" : signed(value - r.committed)}
-                          </span>
-
-                          <span className={`${W.status} flex justify-start`}>
-                            {value == null ? (
-                              <span className="whitespace-nowrap rounded-full bg-surface-2 px-2.5 py-1 text-xs text-ink-muted">
-                                Not entered
-                              </span>
-                            ) : (
-                              <StatusChip rate={rate} />
-                            )}
-                          </span>
-                        </div>
-
-
-                      </div>
-
-                      {canEditRoster && (
-                        <div className="flex w-[66px] shrink-0 items-center justify-center gap-0.5 border-l border-hairline/60">
-                          <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
-                          <DeleteButton
-                            label={`${r.name} from the roster`}
-                            onConfirm={() => removeContractor(r.id)}
-                          />
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      {canEditRoster ? (
+                        <EditableName
+                          key={`${r.id}:${editingId === r.id}`}
+                          value={r.name}
+                          label={r.name}
+                          editing={editingId === r.id}
+                          onCancel={() => setEditingId(null)}
+                          onRename={(to) => renameContractor(r.id, to).size > 0}
+                        />
+                      ) : (
+                        <span className="block truncate text-sm font-semibold text-ink">
+                          {r.name}
+                        </span>
                       )}
+                      <span className="mt-0.5 block truncate text-xs text-ink-muted">
+                        committed {num(r.committed)} · {stateOf(value, variance)}
+                      </span>
                     </div>
+
+                    <span
+                      className={`tnum w-10 shrink-0 text-right text-xs ${
+                        variance != null && variance < 0
+                          ? "text-[var(--critical)]"
+                          : "text-ink-muted"
+                      }`}
+                    >
+                      {variance == null ? "—" : signed(variance)}
+                    </span>
+
+                    {/* The only thing on the row you ever touch. */}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      aria-label={`Manpower reported by ${r.name} under ${r.type}`}
+                      value={draft[r.id] ?? ""}
+                      onChange={(e) => update(r.id, e.target.value)}
+                      placeholder="—"
+                      className={`tnum w-16 shrink-0 rounded-lg px-2 py-2 text-center text-[15px] font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent/30 ${
+                        value == null
+                          ? // Blank reads as waiting for you, not as empty.
+                            "border border-dashed border-hairline bg-transparent focus:border-accent focus:bg-surface-1"
+                          : "border border-hairline bg-surface-2 focus:border-accent focus:bg-surface-1"
+                      }`}
+                    />
+
+                    {canEditRoster && (
+                      <span className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                        <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
+                        <DeleteButton
+                          label={`${r.name} from the roster`}
+                          onConfirm={() => removeContractor(r.id)}
+                        />
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -286,44 +271,41 @@ export default function EntryForm({
           </span>
         )}
         <span className="ml-auto max-w-sm text-xs text-ink-muted">
-          Leave a box empty for a contractor who did not report — it stays
-          &ldquo;not entered&rdquo; rather than counting as zero.
+          Leave a box empty for a contractor who did not report — it stays &ldquo;not
+          entered&rdquo; rather than counting as zero.
         </span>
       </div>
     </div>
   );
 }
 
-/**
- * Column widths, shared by the header strip and every card so the labels at
- * the top keep pointing at the right figures.
- */
-const W = {
-  committed: "w-24",
-  input: "w-28",
-  variance: "w-20",
-  status: "w-40",
-} as const;
-
-/**
- * Repeats the column name on narrow screens, where the header strip is
- * hidden and a bare figure would be ambiguous.
- */
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-ink-muted lg:hidden">
-      {children}
-    </span>
-  );
+/** What the row says in words, so the colour bar never carries it alone. */
+function stateOf(value: number | null, variance: number | null): string {
+  if (value == null || variance == null) return "not entered";
+  if (variance < 0) return `short by ${num(-variance)}`;
+  if (variance > 0) return `over by ${num(variance)}`;
+  return "on commitment";
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  tone,
+  children,
+}: {
+  label: string;
+  /** Only the fill rate uses this; the rest stay in ink. */
+  tone?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <span className="flex items-baseline gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
-        {label}
-      </span>
-      <span className="tnum text-sm font-semibold text-ink">{value}</span>
-    </span>
+    <div>
+      <p
+        className="tnum text-2xl font-semibold leading-none tracking-tight text-ink"
+        style={tone ? { color: tone } : undefined}
+      >
+        {children}
+      </p>
+      <p className="mt-1.5 text-[11px] text-ink-muted">{label}</p>
+    </div>
   );
 }
