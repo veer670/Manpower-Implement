@@ -20,6 +20,16 @@ type SortKey = "srNo" | "name" | "committed" | "reported";
 type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 /**
+ * The one grid the day's totals, the column headers and every row share, so
+ * that a row's committed figure sits directly under the day's committed total
+ * and its reported box under the day's reported total.
+ */
+const COLUMNS =
+  // The names column takes the extra width, since it is the only one holding
+  // words rather than a figure.
+  "grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 px-3";
+
+/**
  * The daily input form. Contractor type, name and committed headcount are
  * master data and read-only here; only today's manpower is editable, which is
  * the one thing the user fills in each day — so it is the heaviest element on
@@ -149,8 +159,10 @@ export default function EntryForm({
 
   return (
     <div>
-      {/* The day in four figures, at a size that is read rather than squinted at. */}
-      <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* The day in four figures, at a size that is read rather than squinted
+          at. The rows below share this grid, so each row's committed and
+          reported figure sits directly under the day's own total. */}
+      <div className={`mb-4 ${COLUMNS}`}>
         <Metric label="entered">
           {num(totals.filled)}
           <span className="text-sm font-normal text-ink-muted">/{num(rows.length)}</span>
@@ -169,34 +181,17 @@ export default function EntryForm({
 
       {/* Sort controls, sitting over the columns they sort. */}
       {rows.length > 1 && (
-        <div className="mb-2 hidden items-center gap-3 px-3 sm:flex">
-          <span className="w-[3px] shrink-0" />
-          <Head label="Sr." sortKey="srNo" sort={sort} onSort={sortBy} className="w-9 shrink-0" />
-          <Head
-            label="Name"
-            sortKey="name"
-            sort={sort}
-            onSort={sortBy}
-            className="min-w-0 flex-1"
-          />
-          <Head
-            label="Committed"
-            sortKey="committed"
-            sort={sort}
-            onSort={sortBy}
-            className="w-24 justify-center"
-          />
-          <span className="w-12 shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+        <div className={`mb-2 ${COLUMNS}`}>
+          <span className="flex items-center gap-3">
+            <span className="w-[3px] shrink-0" />
+            <Head label="Sr." sortKey="srNo" sort={sort} onSort={sortBy} className="w-9 shrink-0" />
+            <Head label="Name" sortKey="name" sort={sort} onSort={sortBy} className="min-w-0" />
+          </span>
+          <Head label="Committed" sortKey="committed" sort={sort} onSort={sortBy} />
+          <Head label="Reported" sortKey="reported" sort={sort} onSort={sortBy} />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
             +/−
           </span>
-          <Head
-            label="Reported"
-            sortKey="reported"
-            sort={sort}
-            onSort={sortBy}
-            className="w-24 justify-center"
-          />
-          {canEditRoster && <span className="w-[62px] shrink-0" />}
         </div>
       )}
 
@@ -224,73 +219,65 @@ export default function EntryForm({
                 return (
                   <li
                     key={r.id}
-                    className={`group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-surface-2/50 ${
+                    className={`group ${COLUMNS} py-2.5 transition-colors hover:bg-surface-2/50 ${
                       i > 0 ? "border-t border-hairline/50" : ""
                     }`}
                   >
-                    {/* Status as a bar, not a pill: a column of these is
-                        scannable in a way a column of words is not. The line
-                        under the name still says it in words. */}
-                    <span
-                      role="img"
-                      aria-label={value == null ? "Not entered" : severityLabel[severity]}
-                      className="h-8 w-[3px] shrink-0 rounded-full"
-                      style={{
-                        background: value == null ? "var(--gridline)" : SEVERITY_COLOR[severity],
-                      }}
-                    />
-
-                    {canEditRoster ? (
-                      <SrNoInput
-                        value={r.srNo}
-                        placeholder={srNo}
-                        label={r.name}
-                        onChange={(n) => setContractorSrNo(r.id, n)}
+                    <div className="flex min-w-0 items-center gap-3">
+                      {/* Status as a bar, not a pill: a column of these is
+                          scannable in a way a column of words is not. The line
+                          under the name still says it in words. */}
+                      <span
+                        role="img"
+                        aria-label={value == null ? "Not entered" : severityLabel[severity]}
+                        className="h-8 w-[3px] shrink-0 rounded-full"
+                        style={{
+                          background: value == null ? "var(--gridline)" : SEVERITY_COLOR[severity],
+                        }}
                       />
-                    ) : (
-                      <span className="tnum w-6 shrink-0 text-center text-xs text-ink-muted">
-                        {r.srNo || srNo}
-                      </span>
-                    )}
 
-                    <div className="min-w-0 flex-1">
                       {canEditRoster ? (
-                        <EditableName
-                          key={`${r.id}:${editingId === r.id}`}
-                          value={r.name}
+                        <SrNoInput
+                          value={r.srNo}
+                          placeholder={srNo}
                           label={r.name}
-                          editing={editingId === r.id}
-                          onCancel={() => setEditingId(null)}
-                          onRename={(to) => renameContractor(r.id, to).size > 0}
+                          onChange={(n) => setContractorSrNo(r.id, n)}
                         />
                       ) : (
-                        <span className="block truncate text-sm font-semibold text-ink">
-                          {r.name}
+                        <span className="tnum w-9 shrink-0 text-center text-xs text-ink-muted">
+                          {r.srNo || srNo}
                         </span>
                       )}
-                      {/* The committed figure has its own column now, so the
-                          line under the name only says where the day stands. */}
-                      <span className="mt-0.5 block truncate text-xs text-ink-muted">
-                        {stateOf(value, variance)}
-                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        {canEditRoster ? (
+                          <EditableName
+                            key={`${r.id}:${editingId === r.id}`}
+                            value={r.name}
+                            label={r.name}
+                            editing={editingId === r.id}
+                            onCancel={() => setEditingId(null)}
+                            onRename={(to) => renameContractor(r.id, to).size > 0}
+                          />
+                        ) : (
+                          <span className="block truncate text-sm font-semibold text-ink">
+                            {r.name}
+                          </span>
+                        )}
+                        {/* The committed figure has its own column now, so the
+                            line under the name only says where the day stands. */}
+                        <span className="mt-0.5 block truncate text-xs text-ink-muted">
+                          {stateOf(value, variance)}
+                        </span>
+                      </div>
                     </div>
 
-                    <span className="tnum w-24 shrink-0 text-center text-sm font-semibold text-ink">
+                    <span className="tnum text-sm font-semibold text-ink">
                       {num(r.committed)}
                     </span>
 
-                    <span
-                      className={`tnum w-12 shrink-0 text-center text-xs ${
-                        variance != null && variance < 0
-                          ? "text-[var(--critical)]"
-                          : "text-ink-muted"
-                      }`}
-                    >
-                      {variance == null ? "—" : signed(variance)}
-                    </span>
-
                     {/* The only thing on the row you ever touch. */}
-                    <span className="flex w-24 shrink-0 justify-center">
+                    <span className="flex">
                       <input
                         type="text"
                         inputMode="numeric"
@@ -307,15 +294,29 @@ export default function EntryForm({
                       />
                     </span>
 
-                    {canEditRoster && (
-                      <span className="flex w-[62px] shrink-0 items-center justify-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                        <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
-                        <DeleteButton
-                          label={`${r.name} from the roster`}
-                          onConfirm={() => removeContractor(r.id)}
-                        />
+                    {/* The row's own standing, under the day's fill rate, with
+                        the roster controls kept out at the far edge. */}
+                    <span className="flex items-center justify-between">
+                      <span
+                        className={`tnum text-xs ${
+                          variance != null && variance < 0
+                            ? "text-[var(--critical)]"
+                            : "text-ink-muted"
+                        }`}
+                      >
+                        {variance == null ? "—" : signed(variance)}
                       </span>
-                    )}
+
+                      {canEditRoster && (
+                        <span className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                          <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
+                          <DeleteButton
+                            label={`${r.name} from the roster`}
+                            onConfirm={() => removeContractor(r.id)}
+                          />
+                        </span>
+                      )}
+                    </span>
                   </li>
                 );
               })}

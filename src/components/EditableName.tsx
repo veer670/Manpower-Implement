@@ -30,8 +30,12 @@ export default function EditableName({
   // Remounted by the parent's `key` when editing starts, so the draft seeds
   // from the current value without an effect.
   if (!editing) {
+    // `block` so the truncation bites: an inline span ignores the overflow
+    // rule and runs on into the next column.
     return (
-      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{value}</span>
+      <span className="block min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+        {value}
+      </span>
     );
   }
 
