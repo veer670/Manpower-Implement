@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, ChevronRight, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronRight, Trash2, TriangleAlert } from "lucide-react";
 import { num } from "@/lib/format";
 import type { OrderedName } from "@/lib/metrics";
 import SrNoInput from "./SrNoInput";
+import SortHeader from "./SortHeader";
 import EditableName, { EditButton } from "./EditableName";
 
 type SortKey = "srNo" | "name" | "committed" | "reported";
@@ -89,8 +90,8 @@ export default function ListPicker({
       {/* Sort controls, sitting over the columns they sort. */}
       {items.length > 1 && (
         <div className="mb-2 hidden items-center px-3 sm:flex">
-          <Header label="Sr." sortKey="srNo" sort={sort} onSort={toggle} className="w-11 shrink-0" />
-          <Header
+          <Head label="Sr." sortKey="srNo" sort={sort} onSort={toggle} className="w-11 shrink-0" />
+          <Head
             label="Name"
             sortKey="name"
             sort={sort}
@@ -99,14 +100,15 @@ export default function ListPicker({
           />
           {hasStats && (
             <>
-              <Header
+              <Head
                 label="Committed"
                 sortKey="committed"
                 sort={sort}
                 onSort={toggle}
                 className="w-24 justify-center"
               />
-              <Header
+              <span className="w-10 shrink-0" />
+              <Head
                 label="Reported"
                 sortKey="reported"
                 sort={sort}
@@ -224,6 +226,8 @@ export default function ListPicker({
                 {hasStats && (
                   <>
                     <Figure label="committed" value={stats?.committed ?? 0} />
+                    {/* The two figures read as two columns, not one pair. */}
+                    <span className="hidden w-10 shrink-0 sm:block" />
                     <Figure label="reported" value={stats?.reported ?? 0} />
                     {/* Holds the figures in the middle of the row rather than
                         letting them drift out to the right-hand edge. */}
@@ -270,13 +274,13 @@ export default function ListPicker({
   );
 }
 
-/** One sortable column label, with an arrow when it is the one in force. */
-function Header({
+/** SortHeader, with this list's sort state wired in. */
+function Head({
   label,
   sortKey,
   sort,
   onSort,
-  className = "",
+  className,
 }: {
   label: string;
   sortKey: SortKey;
@@ -284,19 +288,14 @@ function Header({
   onSort: (key: SortKey) => void;
   className?: string;
 }) {
-  const active = sort.key === sortKey;
-  const Arrow = sort.dir === "asc" ? ArrowUp : ArrowDown;
   return (
-    <button
-      onClick={() => onSort(sortKey)}
-      aria-label={`Sort by ${label}`}
-      className={`flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-        active ? "text-ink" : "text-ink-muted hover:text-ink-secondary"
-      } ${className}`}
-    >
-      {label}
-      {active && <Arrow size={11} strokeWidth={2.6} aria-hidden />}
-    </button>
+    <SortHeader
+      label={label}
+      active={sort.key === sortKey}
+      dir={sort.dir}
+      onSort={() => onSort(sortKey)}
+      className={className}
+    />
   );
 }
 

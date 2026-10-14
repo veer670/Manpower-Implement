@@ -13,7 +13,11 @@ import { fillRate, severityForFillRate, severityLabel, type DayRow } from "@/lib
 import { SEVERITY_COLOR } from "./StatusChip";
 import DeleteButton from "./DeleteButton";
 import SrNoInput from "./SrNoInput";
+import SortHeader from "./SortHeader";
 import EditableName, { EditButton } from "./EditableName";
+
+type SortKey = "srNo" | "name" | "committed" | "reported";
+type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 /**
  * The daily input form. Contractor type, name and committed headcount are
@@ -43,6 +47,8 @@ export default function EntryForm({
   const [draft, setDraft] = useState<Record<string, string>>(seed);
   const [saved, setSaved] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sort, setSort] = useState<Sort | null>(null);
+  const [order, setOrder] = useState<string[] | null>(null);
 
   const parsed = useMemo(() => {
     const out = new Map<string, number | null>();
@@ -95,6 +101,40 @@ export default function EntryForm({
     return [...map.entries()];
   }, [rows]);
 
+  /**
+   * Re-order on a header click, and only then: the order is frozen into a
+   * list of ids rather than recomputed each render, so typing a figure into
+   * the column being sorted cannot make the row jump out from under the
+   * cursor mid-entry.
+   */
+  function sortBy(key: SortKey) {
+    const dir: "asc" | "desc" =
+      sort?.key === key
+        ? sort.dir === "asc"
+          ? "desc"
+          : "asc"
+        : // A column of figures is opened to find the big numbers; a column of
+          // names or serials to find a place in the list.
+          key === "committed" || key === "reported"
+          ? "desc"
+          : "asc";
+
+    const srNoOf = (r: DayRow) => r.srNo || rows.indexOf(r) + 1;
+    const ranked = [...rows].sort((a, b) => {
+      let cmp: number;
+      if (key === "name") cmp = a.name.localeCompare(b.name);
+      else if (key === "srNo") cmp = srNoOf(a) - srNoOf(b);
+      else if (key === "committed") cmp = a.committed - b.committed;
+      else cmp = (parsed.get(a.id) ?? 0) - (parsed.get(b.id) ?? 0);
+      return dir === "asc" ? cmp : -cmp;
+    });
+
+    setSort({ key, dir });
+    setOrder(ranked.map((r) => r.id));
+  }
+
+  const rank = order ? new Map(order.map((id, i) => [id, i])) : null;
+
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-hairline py-12 text-center">
@@ -127,6 +167,39 @@ export default function EntryForm({
         </Metric>
       </div>
 
+      {/* Sort controls, sitting over the columns they sort. */}
+      {rows.length > 1 && (
+        <div className="mb-2 hidden items-center gap-3 px-3 sm:flex">
+          <span className="w-[3px] shrink-0" />
+          <Head label="Sr." sortKey="srNo" sort={sort} onSort={sortBy} className="w-9 shrink-0" />
+          <Head
+            label="Name"
+            sortKey="name"
+            sort={sort}
+            onSort={sortBy}
+            className="min-w-0 flex-1"
+          />
+          <Head
+            label="Committed"
+            sortKey="committed"
+            sort={sort}
+            onSort={sortBy}
+            className="w-24 justify-center"
+          />
+          <span className="w-12 shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-ink-muted">
+            +/−
+          </span>
+          <Head
+            label="Reported"
+            sortKey="reported"
+            sort={sort}
+            onSort={sortBy}
+            className="w-24 justify-center"
+          />
+          {canEditRoster && <span className="w-[62px] shrink-0" />}
+        </div>
+      )}
+
       <div className="space-y-4">
         {blocks.map(([type, block]) => (
           <section key={type}>
@@ -137,7 +210,10 @@ export default function EntryForm({
             )}
 
             <ul className="overflow-hidden rounded-xl border border-hairline bg-surface-1">
-              {block.map((r, i) => {
+              {(rank
+                ? [...block].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+                : block
+              ).map((r, i) => {
                 const srNo = rows.indexOf(r) + 1;
                 const value = parsed.get(r.id) ?? null;
                 const variance = value == null ? null : value - r.committed;
@@ -192,13 +268,19 @@ export default function EntryForm({
                           {r.name}
                         </span>
                       )}
+                      {/* The committed figure has its own column now, so the
+                          line under the name only says where the day stands. */}
                       <span className="mt-0.5 block truncate text-xs text-ink-muted">
-                        committed {num(r.committed)} · {stateOf(value, variance)}
+                        {stateOf(value, variance)}
                       </span>
                     </div>
 
+                    <span className="tnum w-24 shrink-0 text-center text-sm font-semibold text-ink">
+                      {num(r.committed)}
+                    </span>
+
                     <span
-                      className={`tnum w-10 shrink-0 text-right text-xs ${
+                      className={`tnum w-12 shrink-0 text-center text-xs ${
                         variance != null && variance < 0
                           ? "text-[var(--critical)]"
                           : "text-ink-muted"
@@ -208,23 +290,25 @@ export default function EntryForm({
                     </span>
 
                     {/* The only thing on the row you ever touch. */}
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      aria-label={`Manpower reported by ${r.name} under ${r.type}`}
-                      value={draft[r.id] ?? ""}
-                      onChange={(e) => update(r.id, e.target.value)}
-                      placeholder="—"
-                      className={`tnum w-16 shrink-0 rounded-lg px-2 py-2 text-center text-[15px] font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent/30 ${
-                        value == null
-                          ? // Blank reads as waiting for you, not as empty.
-                            "border border-dashed border-hairline bg-transparent focus:border-accent focus:bg-surface-1"
-                          : "border border-hairline bg-surface-2 focus:border-accent focus:bg-surface-1"
-                      }`}
-                    />
+                    <span className="flex w-24 shrink-0 justify-center">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        aria-label={`Manpower reported by ${r.name} under ${r.type}`}
+                        value={draft[r.id] ?? ""}
+                        onChange={(e) => update(r.id, e.target.value)}
+                        placeholder="—"
+                        className={`tnum w-16 rounded-lg px-2 py-2 text-center text-[15px] font-semibold text-ink placeholder:font-normal placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-accent/30 ${
+                          value == null
+                            ? // Blank reads as waiting for you, not as empty.
+                              "border border-dashed border-hairline bg-transparent focus:border-accent focus:bg-surface-1"
+                            : "border border-hairline bg-surface-2 focus:border-accent focus:bg-surface-1"
+                        }`}
+                      />
+                    </span>
 
                     {canEditRoster && (
-                      <span className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                      <span className="flex w-[62px] shrink-0 items-center justify-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                         <EditButton label={r.name} onClick={() => setEditingId(r.id)} />
                         <DeleteButton
                           label={`${r.name} from the roster`}
@@ -276,6 +360,32 @@ export default function EntryForm({
         </span>
       </div>
     </div>
+  );
+}
+
+/** SortHeader, with this form's sort state wired in. */
+function Head({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: SortKey;
+  /** Null until a header is clicked: the roster's own order. */
+  sort: Sort | null;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  return (
+    <SortHeader
+      label={label}
+      active={sort?.key === sortKey}
+      dir={sort?.dir ?? "asc"}
+      onSort={() => onSort(sortKey)}
+      className={className}
+    />
   );
 }
 
