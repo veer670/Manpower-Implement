@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, KeyRound, UserPlus } from "lucide-react";
+import { KeyRound, UserPlus } from "lucide-react";
 import Card from "@/components/Card";
 import EntryForm from "@/components/EntryForm";
 import ListPicker from "@/components/ListPicker";
 import QuickAdd from "@/components/QuickAdd";
 import AssignPanel from "@/components/AssignPanel";
+import Breadcrumb, { type Crumb } from "@/components/Breadcrumb";
 import { longDate } from "@/lib/format";
 import { allDates, categoriesOf, contractorsOf, rowsForDate, typesOf } from "@/lib/metrics";
 import {
@@ -179,15 +180,17 @@ export default function EntryPage() {
       />
     ) : null;
 
-  const back = (label: string, onClick: () => void) => (
-    <button
-      onClick={onClick}
-      className="mb-4 flex items-center gap-1.5 rounded-md text-xs font-medium text-ink-secondary hover:text-ink"
-    >
-      <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
-      {label}
-    </button>
-  );
+  const crumbs: Crumb[] = [
+    {
+      label: "Department Name",
+      onClick: () => {
+        setCategory(null);
+        setType(null);
+      },
+    },
+    ...(liveCategory ? [{ label: liveCategory, onClick: () => setType(null) }] : []),
+    ...(liveType ? [{ label: liveType }] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-[1100px] space-y-5">
@@ -241,9 +244,9 @@ export default function EntryPage() {
 
       {level === "type" && liveCategory && (
         <Card actions={headerControls}>
+          <Breadcrumb crumbs={crumbs} />
           {assignPanel}
           {quickAdd}
-          {back("Department Name", () => setCategory(null))}
           <ListPicker
             items={types}
             onSelect={setType}
@@ -275,9 +278,9 @@ export default function EntryPage() {
           }
           actions={headerControls}
         >
+          {access.canManageRoster && <Breadcrumb crumbs={crumbs} />}
           {assignPanel}
           {quickAdd}
-          {access.canManageRoster && liveCategory && back(liveCategory, () => setType(null))}
 
           {date ? (
             // Keyed by date and type so switching either re-seeds the draft

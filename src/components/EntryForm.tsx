@@ -106,6 +106,19 @@ export default function EntryForm({
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-hairline bg-surface-2 px-4 py-3">
+        <span className="flex-1 text-sm font-semibold text-ink">
+          {num(totals.filled)} of {num(rows.length)} entered
+        </span>
+        <Summary label="Committed" value={num(totals.committed)} />
+        <Summary label="Reported" value={num(totals.actual)} />
+        <Summary label="Variance" value={signed(totals.actual - totals.committed)} />
+        <Summary
+          label="Fill rate"
+          value={pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
+        />
+      </div>
+
       {/* Column labels live here once, not on every card. The widths below are
           shared with the card columns so the two line up. */}
       <div className="mb-2 hidden items-center gap-x-5 px-4 lg:flex">
@@ -240,20 +253,6 @@ export default function EntryForm({
             </ul>
           </section>
         ))}
-      </div>
-
-      {/* Totals, as a strip under the cards rather than a table foot. */}
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-hairline bg-surface-2 px-4 py-3">
-        <span className="flex-1 text-sm font-semibold text-ink">
-          Total — {num(totals.filled)} of {num(rows.length)} entered
-        </span>
-        <Summary label="Committed" value={num(totals.committed)} />
-        <Summary label="Reported" value={num(totals.actual)} />
-        <Summary label="Variance" value={signed(totals.actual - totals.committed)} />
-        <Summary
-          label="Fill rate"
-          value={pct(fillRate({ committed: totals.committed, actual: totals.actual }), 1)}
-        />
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
