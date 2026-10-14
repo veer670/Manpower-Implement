@@ -18,6 +18,7 @@ export default function ListPicker({
   onSrNo,
   onRename,
   countFor,
+  statsFor,
   deleteNote,
   emptyMessage,
 }: {
@@ -31,6 +32,8 @@ export default function ListPicker({
   onRename?: (from: string, to: string) => boolean;
   /** How many contractors sit under this item, for the confirmation wording. */
   countFor?: (name: string) => number;
+  /** The day's figures for this item. Omit to show none. */
+  statsFor?: (name: string) => { committed: number; reported: number } | null;
   /** What else goes with it, named in the confirmation. */
   deleteNote?: (name: string) => string;
   emptyMessage: string;
@@ -142,6 +145,17 @@ export default function ListPicker({
                   {name}
                 </span>
               )}
+              {(() => {
+                const stats = statsFor?.(name);
+                if (!stats) return null;
+                return (
+                  <span className="hidden shrink-0 items-center gap-5 pr-1 sm:flex">
+                    <Figure label="committed" value={stats.committed} />
+                    <Figure label="reported" value={stats.reported} />
+                  </span>
+                );
+              })()}
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -177,5 +191,15 @@ export default function ListPicker({
         );
       })}
     </ul>
+  );
+}
+
+/** A figure on a list row: value first, the word under it, quietly. */
+function Figure({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="text-right">
+      <span className="tnum block text-sm font-semibold leading-none text-ink">{num(value)}</span>
+      <span className="mt-1 block text-[10px] text-ink-muted">{label}</span>
+    </span>
   );
 }

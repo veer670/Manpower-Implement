@@ -76,6 +76,34 @@ export default function EntryPage() {
     [scoped, data.entries, date],
   );
 
+  /**
+   * Committed is every contractor's commitment; reported is what came in.
+   * Deliberately not the like-for-like pair used for fill rate — on an
+   * overview "we committed 115, 88 turned up" is the question being asked.
+   */
+  const statsBy = (key: (r: (typeof rows)[number]) => string) => {
+    const totals = new Map<string, { committed: number; reported: number }>();
+    for (const r of rows) {
+      const k = key(r);
+      const cur = totals.get(k) ?? { committed: 0, reported: 0 };
+      cur.committed += r.committed;
+      cur.reported += r.actual ?? 0;
+      totals.set(k, cur);
+    }
+    return totals;
+  };
+
+  const categoryStats = useMemo(
+    () => statsBy((r) => r.category),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows],
+  );
+  const typeStats = useMemo(
+    () => statsBy((r) => r.type),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows],
+  );
+
   const contractor = access.contractorId
     ? data.contractors.find((c) => c.id === access.contractorId)
     : null;
@@ -182,7 +210,7 @@ export default function EntryPage() {
 
   const crumbs: Crumb[] = [
     {
-      label: "Department Name",
+      label: "First Step",
       onClick: () => {
         setCategory(null);
         setType(null);
@@ -215,7 +243,7 @@ export default function EntryPage() {
       </div>
 
       {level === "category" && (
-        <Card title="Department Name" actions={headerControls}>
+        <Card title="First Step" subtitle="Departments" actions={headerControls}>
           {assignPanel}
           {quickAdd}
           <ListPicker
@@ -229,6 +257,7 @@ export default function EntryPage() {
               setCategory(to);
               return true;
             }}
+            statsFor={(c) => categoryStats.get(c) ?? null}
             countFor={(c) => roster.filter((x) => x.category === c).length}
             deleteNote={(c) => {
               const n = roster.filter((x) => x.category === c).length;
@@ -243,7 +272,7 @@ export default function EntryPage() {
       )}
 
       {level === "type" && liveCategory && (
-        <Card actions={headerControls}>
+        <Card title="Second Step" subtitle={liveCategory} actions={headerControls}>
           <Breadcrumb crumbs={crumbs} />
           {assignPanel}
           {quickAdd}
@@ -258,6 +287,7 @@ export default function EntryPage() {
               setType(to);
               return true;
             }}
+            statsFor={(t) => typeStats.get(t) ?? null}
             countFor={(t) =>
               roster.filter((x) => x.category === liveCategory && x.type === t).length
             }
@@ -268,10 +298,10 @@ export default function EntryPage() {
 
       {level === "contractors" && (
         <Card
-          title={liveType ?? contractor?.type ?? ""}
+          title={access.contractorId ? (contractor?.type ?? "") : "Third Step"}
           subtitle={
             date
-              ? `${longDate(date)}${
+              ? `${liveType ? `${liveType} · ` : ""}${longDate(date)}${
                   dates.includes(date) ? " — figures already saved; editing replaces them." : ""
                 }`
               : undefined
