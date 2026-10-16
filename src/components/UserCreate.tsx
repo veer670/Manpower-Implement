@@ -5,6 +5,7 @@ import { Check, Copy, KeyRound, RefreshCw, ShieldCheck, Trash2, UserPlus } from 
 import * as auth from "@/lib/auth";
 import { useUsers } from "@/lib/useAuth";
 import { useStore } from "@/lib/store";
+import { useOrigin } from "@/lib/origin";
 import { longDate } from "@/lib/format";
 import { categoriesOf } from "@/lib/metrics";
 
@@ -336,23 +337,22 @@ export default function UserCreate() {
 export const signInPath = (username: string) => `/u/${encodeURIComponent(username)}`;
 
 /**
- * The link to hand to one person, copied as a full URL.
- *
- * Shown as the path, because the origin is long and the same on every row —
- * but what lands on the clipboard is the whole address, ready to paste into
- * WhatsApp.
+ * The whole link to hand to one person — the address this page is open at,
+ * plus their user ID. Shown in full rather than as a path, because it gets
+ * read off the screen and typed into a message as often as it gets copied.
  */
 function CopyLink({ username }: { username: string }) {
+  const origin = useOrigin();
   const [copied, setCopied] = useState(false);
-  const path = signInPath(username);
+  const link = origin + signInPath(username);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard can be blocked; the path is on screen either way.
+      // Clipboard can be blocked; the link is on screen either way.
     }
   }
 
@@ -360,14 +360,20 @@ function CopyLink({ username }: { username: string }) {
     <button
       onClick={copy}
       aria-label={`Copy the sign-in link for ${username}`}
-      title="Copy the full link"
-      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-secondary hover:bg-surface-2 hover:text-ink"
+      title="Copy this link"
+      className="flex max-w-[320px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-ink-secondary hover:bg-surface-2 hover:text-ink"
     >
-      <span className="tnum">{path}</span>
+      <span className="min-w-0 flex-1 break-all">{link}</span>
       {copied ? (
-        <Check size={12} strokeWidth={2.6} style={{ color: "var(--good)" }} aria-hidden />
+        <Check
+          size={12}
+          strokeWidth={2.6}
+          style={{ color: "var(--good)" }}
+          className="shrink-0"
+          aria-hidden
+        />
       ) : (
-        <Copy size={12} strokeWidth={2.3} aria-hidden />
+        <Copy size={12} strokeWidth={2.3} className="shrink-0" aria-hidden />
       )}
     </button>
   );
@@ -383,12 +389,13 @@ function Issued({
   password: string;
   onDismiss: () => void;
 }) {
+  const origin = useOrigin();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
     try {
       // Everything the person needs, in one paste: where to go and what to type.
-      const link = window.location.origin + signInPath(username);
+      const link = origin + signInPath(username);
       await navigator.clipboard.writeText(
         `Manpower entry\nLink: ${link}\nUser ID: ${username}\nPassword: ${password}`,
       );
@@ -423,10 +430,10 @@ function Issued({
               <dt className="text-[11px] font-medium text-ink-muted">Password</dt>
               <dd className="tnum mt-0.5 text-sm font-semibold text-ink">{password}</dd>
             </div>
-            <div>
+            <div className="min-w-0">
               <dt className="text-[11px] font-medium text-ink-muted">Sign-in link</dt>
-              <dd className="tnum mt-0.5 text-sm font-semibold text-ink">
-                {signInPath(username)}
+              <dd className="mt-0.5 break-all text-sm font-semibold text-ink">
+                {origin + signInPath(username)}
               </dd>
             </div>
           </dl>
