@@ -6,6 +6,7 @@ import { Database, HardHat, LogIn } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "@/lib/store";
 import { useAccess, useAuthReady } from "@/lib/useAuth";
+import { isSignInPath } from "@/lib/paths";
 
 /**
  * Stands in front of every screen.
@@ -21,8 +22,8 @@ export default function AppGate({ children }: { children: ReactNode }) {
   const access = useAccess();
   const { status } = useStore();
 
-  // The login page is the way out of being signed out; never gate it.
-  if (pathname === "/login") return <>{children}</>;
+  // The sign-in screens are the way out of being signed out; never gate them.
+  if (isSignInPath(pathname)) return <>{children}</>;
 
   if (!ready) return <Splash>Loading…</Splash>;
 

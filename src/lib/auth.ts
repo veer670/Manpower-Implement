@@ -31,6 +31,12 @@ export type User = {
 
 export type Access = {
   session: Session | null;
+  /**
+   * True when the session is the open door rather than a sign-in, so a
+   * personal link knows to ask for a password instead of saying you are
+   * already in.
+   */
+  open: boolean;
   canManageRoster: boolean;
   canManageLogins: boolean;
   category: string | null;
@@ -41,6 +47,7 @@ export type Access = {
 
 const SIGNED_OUT: Access = {
   session: null,
+  open: false,
   canManageRoster: false,
   canManageLogins: false,
   category: null,

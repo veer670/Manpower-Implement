@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
@@ -30,7 +31,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {THEME_SCRIPT}
         </Script>
         <StoreProvider>
-          <AppShell>{children}</AppShell>
+          {/* The shell reads the current pathname to light up the nav, which
+              a route with the user ID in its path cannot know at build time.
+              The boundary lets those pages render on request while every
+              fixed route still prerenders. */}
+          <Suspense fallback={null}>
+            <AppShell>{children}</AppShell>
+          </Suspense>
         </StoreProvider>
       </body>
     </html>

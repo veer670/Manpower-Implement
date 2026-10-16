@@ -251,6 +251,7 @@ export default function UserCreate() {
               <Th>User ID</Th>
               <Th>Role</Th>
               <Th>Sees</Th>
+              <Th>Sign-in link</Th>
               <Th>Created</Th>
               <Th align="right">
                 <span className="sr-only">Actions</span>
@@ -288,6 +289,9 @@ export default function UserCreate() {
                         ? `${c.name} — ${c.category} / ${c.type}`
                         : "—"}
                   </td>
+                  <td className="py-2.5 pr-4">
+                    <CopyLink username={u.username} />
+                  </td>
                   <td className="py-2.5 pr-4 text-ink-secondary">
                     {longDate(u.createdAt.slice(0, 10))}
                   </td>
@@ -316,7 +320,7 @@ export default function UserCreate() {
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-ink-muted">
+                <td colSpan={6} className="py-8 text-center text-sm text-ink-muted">
                   No logins yet.
                 </td>
               </tr>
@@ -325,6 +329,47 @@ export default function UserCreate() {
         </table>
       </div>
     </div>
+  );
+}
+
+/** Each login's own sign-in page, with the user ID already filled in. */
+export const signInPath = (username: string) => `/u/${encodeURIComponent(username)}`;
+
+/**
+ * The link to hand to one person, copied as a full URL.
+ *
+ * Shown as the path, because the origin is long and the same on every row —
+ * but what lands on the clipboard is the whole address, ready to paste into
+ * WhatsApp.
+ */
+function CopyLink({ username }: { username: string }) {
+  const [copied, setCopied] = useState(false);
+  const path = signInPath(username);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be blocked; the path is on screen either way.
+    }
+  }
+
+  return (
+    <button
+      onClick={copy}
+      aria-label={`Copy the sign-in link for ${username}`}
+      title="Copy the full link"
+      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-secondary hover:bg-surface-2 hover:text-ink"
+    >
+      <span className="tnum">{path}</span>
+      {copied ? (
+        <Check size={12} strokeWidth={2.6} style={{ color: "var(--good)" }} aria-hidden />
+      ) : (
+        <Copy size={12} strokeWidth={2.3} aria-hidden />
+      )}
+    </button>
   );
 }
 
@@ -342,7 +387,11 @@ function Issued({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(`User ID: ${username}\nPassword: ${password}`);
+      // Everything the person needs, in one paste: where to go and what to type.
+      const link = window.location.origin + signInPath(username);
+      await navigator.clipboard.writeText(
+        `Manpower entry\nLink: ${link}\nUser ID: ${username}\nPassword: ${password}`,
+      );
       setCopied(true);
     } catch {
       // Clipboard can be blocked; the credentials are on screen either way.
@@ -374,7 +423,17 @@ function Issued({
               <dt className="text-[11px] font-medium text-ink-muted">Password</dt>
               <dd className="tnum mt-0.5 text-sm font-semibold text-ink">{password}</dd>
             </div>
+            <div>
+              <dt className="text-[11px] font-medium text-ink-muted">Sign-in link</dt>
+              <dd className="tnum mt-0.5 text-sm font-semibold text-ink">
+                {signInPath(username)}
+              </dd>
+            </div>
           </dl>
+          <p className="mt-2 text-xs text-ink-muted">
+            Copy takes the full link, the user ID and the password together — paste it
+            straight into a message.
+          </p>
           <div className="mt-3 flex items-center gap-2">
             <button
               onClick={copy}

@@ -18,6 +18,7 @@ import * as auth from "@/lib/auth";
 import { useAccess, useSession } from "@/lib/useAuth";
 import { useStore } from "@/lib/store";
 import { num } from "@/lib/format";
+import { isSignInPath } from "@/lib/paths";
 
 const ADMIN_NAV = [
   { href: "/", label: "Dashboard", Icon: LayoutDashboard },
@@ -42,8 +43,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     ? data.contractors.find((c) => c.id === session.contractorId)
     : undefined;
 
-  // The sign-in page is its own thing — no shell chrome around it.
-  if (pathname === "/login") {
+  // The sign-in screens are their own thing — no shell chrome around them.
+  if (isSignInPath(pathname)) {
     return (
       <div className="min-h-full">
         <div className="flex justify-end p-4">

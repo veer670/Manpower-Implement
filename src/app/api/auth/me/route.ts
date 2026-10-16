@@ -11,8 +11,10 @@ export async function GET() {
       canManageRoster: access.canManageRoster,
       canManageLogins: access.canManageLogins,
       category: access.category,
-    type: access.type,
+      type: access.type,
       contractorId: access.contractorId,
+      // Nobody actually signed in — the open door let them through.
+      open: access.session?.open === true,
     });
   } catch (err) {
     return fail("me route", err);

@@ -51,6 +51,12 @@ export type Session = {
   category: string | null;
   /** Narrows an admin to one type within its category; null means all of them. */
   type: string | null;
+  /**
+   * True when nobody signed in and the open door let them through, so a
+   * personal sign-in link can still ask for a password rather than greeting
+   * the visitor as the office.
+   */
+  open?: boolean;
 };
 
 export async function createSession(username: string): Promise<string> {
@@ -100,7 +106,14 @@ export async function destroySession(): Promise<void> {
  */
 function openAccess(): Session | null {
   if (process.env.REQUIRE_LOGIN === "1") return null;
-  return { username: "office", role: "office", contractorId: null, category: null, type: null };
+  return {
+    username: "office",
+    role: "office",
+    contractorId: null,
+    category: null,
+    type: null,
+    open: true,
+  };
 }
 
 export async function getSession(): Promise<Session | null> {

@@ -32,8 +32,9 @@ export default function UsersPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-ink">More</h1>
         <p className="mt-1 text-sm text-ink-secondary">
-          Contractor logins. Give a contractor a user ID and password and they can sign in
-          to enter their own manpower — and only their own.
+          Logins and the link that goes with each one. Give someone their user ID,
+          password and link, and they sign in to enter their own manpower — a contractor
+          their own row, an admin their own department.
         </p>
       </div>
 
@@ -46,13 +47,14 @@ export default function UsersPage() {
           aria-hidden
         />
         <div className="text-xs">
-          <p className="font-semibold text-ink">These logins separate roles, not data</p>
+          <p className="font-semibold text-ink">The main link is still open to anyone</p>
           <p className="mt-0.5 text-ink-secondary">
-            Everything runs in the browser, with no server to check a password against.
-            A login controls what someone sees and can edit, which is real and useful —
-            but anyone with access to this machine&rsquo;s browser can still read the
-            underlying data. Passwords are stored hashed, never in plain text. Proper
-            protection needs a backend.
+            A login is checked on the server, and what it may read and change is enforced
+            there — a contractor login can only save its own row. But this site is also
+            set to let anyone who has the plain address in without signing in, as the site
+            office. Set <code className="font-semibold">REQUIRE_LOGIN=1</code> in the
+            deployment&rsquo;s environment variables to close that door, and these logins
+            become the only way in.
           </p>
         </div>
       </div>
