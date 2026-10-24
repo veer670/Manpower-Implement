@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manpower Implement</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --ink:#1c2230; --muted:#6b7385; --line:#e3e6ec;
+    --brand:#1f4e79; --brand-soft:#e8eff7; --ok:#1e7d4f; --ok-soft:#e5f4ec;
+    --bad:#b42318; --bad-soft:#fdecea; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+  header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .spacer{flex:1}
+  main{max-width:1100px;margin:0 auto;padding:18px 16px 60px}
+  .crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;color:var(--muted);margin-bottom:14px}
+  .crumbs a{color:var(--brand);text-decoration:none;font-weight:600}
+  .crumbs a:hover{text-decoration:underline}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .bar h2{margin:0;font-size:20px;flex:1;min-width:180px}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 14px}
+  button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
+  button.ghost:hover{color:var(--ink);background:#eef0f4}
+  button.danger:hover{color:var(--bad)}
+  header button{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);color:#fff}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+  .stat .k{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .stat .v{font-size:26px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  .stat.short .v{color:var(--bad)}
+  .stat.short.zero .v{color:var(--ok)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:var(--shadow);cursor:pointer;position:relative;transition:transform .08s,border-color .08s}
+  .tile:hover{border-color:var(--brand);transform:translateY(-1px)}
+  .tile h3{margin:0 0 4px;font-size:18px;padding-right:56px;word-break:break-word}
+  .tile .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+  .tile .nums{display:flex;gap:8px}
+  .tile .nums div{flex:1;background:var(--bg);border-radius:8px;padding:6px 8px}
+  .tile .nums span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .tile .nums b{font-size:17px;font-variant-numeric:tabular-nums}
+  .tile .nums .s b{color:var(--bad)}
+  .tile .nums .s.zero b{color:var(--ok)}
+  .tile .acts{position:absolute;top:8px;right:6px;display:flex}
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:32px;text-align:center;color:var(--muted)}
+  .tablewrap{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:560px}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:#fafbfc;font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr:last-child td{border-bottom:none}
+  tfoot td{font-weight:700;background:#fafbfc;border-top:2px solid var(--line);border-bottom:none}
+  td input{width:90px;text-align:right;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-variant-numeric:tabular-nums}
+  td input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+  .pill{display:inline-block;min-width:44px;text-align:center;padding:3px 10px;border-radius:999px;font-weight:700}
+  .pill.bad{background:var(--bad-soft);color:var(--bad)}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  .pill.over{background:var(--brand-soft);color:var(--brand)}
+  dialog{border:none;border-radius:14px;padding:0;width:min(420px,calc(100vw - 32px));box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(16,24,40,.45)}
+  dialog form{padding:20px}
+  dialog h3{margin:0 0 14px}
+  dialog label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  dialog input{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px}
+  dialog .row{display:flex;gap:10px}
+  dialog .row > div{flex:1}
+  dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px}
+  @media (max-width:600px){
+    .summary{grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .stat .v{font-size:20px}
+    header{padding:12px 16px}
+    header h1{font-size:16px}
+    header button{padding:6px 10px;font-size:13px}
+    table{min-width:0}
+    th,td{padding:8px 6px}
+    th{font-size:10px}
+    th .lg{display:none}
+    td input{width:52px;padding:5px 4px}
+    .pill{min-width:32px;padding:3px 7px}
+    td button.ghost{padding:4px 4px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Manpower Implement</h1>
+  <div class="spacer"></div>
+  <button id="btnExport" title="Download a backup of all data">Export</button>
+  <button id="btnImport" title="Load data from a backup file">Import</button>
+  <input type="file" id="fileImport" accept=".json,application/json" hidden>
+</header>
+
+<main id="app"></main>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlgForm">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div class="btns">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="ok" class="primary" id="dlgOk">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ============================================================
+   Manpower Implement
+   Page 1: Teams  ->  Page 2: Departments  ->  Page 3: Contractors
+   Data is saved in this browser (localStorage).
+   ============================================================ */
+
+const STORE_KEY = "manpower-implement-v1";
+
+const SAMPLE = {
+  teams: [
+    { id: "t1", name: "MEP", departments: [
+      { id: "d1", name: "Electrical", contractors: [
+        { id: "c1", name: "Ram",   required: 20, present: 15 },
+        { id: "c2", name: "Shyam", required: 12, present: 12 }
+      ]},
+      { id: "d2", name: "HVAC", contractors: [
+        { id: "c3", name: "Ram",   required: 10, present: 6 }
+      ]}
+    ]},
+    { id: "t2", name: "FACADE", departments: [] }
+  ]
+};
+
+let data = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.teams)) return d; }
+  }catch(e){}
+  return structuredClone(SAMPLE);
+}
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){}
+}
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = v => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
+
+/* ---------- totals ---------- */
+// Short = Required - Present (never below 0). Extra people are shown separately.
+const shortOf = c => Math.max(c.required - c.present, 0);
+function sumContractors(list){
+  return list.reduce((a,c)=>({required:a.required+c.required, present:a.present+c.present, short:a.short+shortOf(c)}),
+                     {required:0,present:0,short:0});
+}
+function sumDept(d){ return sumContractors(d.contractors); }
+function sumTeam(t){ return sumContractors(t.departments.flatMap(d=>d.contractors)); }
+function sumAll(){ return sumContractors(data.teams.flatMap(t=>t.departments.flatMap(d=>d.contractors))); }
+
+/* ---------- routing (#/ , #/team/:id , #/team/:id/dept/:id) ---------- */
+function route(){
+  const parts = location.hash.replace(/^#\/?/,"").split("/").filter(Boolean);
+  if(parts[0]==="team" && parts[1]){
+    const team = data.teams.find(t=>t.id===parts[1]);
+    if(!team) return go("#/");
+    if(parts[2]==="dept" && parts[3]){
+      const dept = team.departments.find(d=>d.id===parts[3]);
+      if(!dept) return go(`#/team/${team.id}`);
+      return renderContractors(team, dept);
+    }
+    return renderDepartments(team);
+  }
+  renderTeams();
+}
+function go(h){ location.hash = h; }
+window.addEventListener("hashchange", route);
+
+/* ---------- shared bits ---------- */
+const app = document.getElementById("app");
+
+function summaryHTML(s){
+  return `<div class="summary">
+    <div class="stat"><div class="k">Required</div><div class="v">${s.required}</div></div>
+    <div class="stat"><div class="k">Present</div><div class="v">${s.present}</div></div>
+    <div class="stat short ${s.short===0?"zero":""}"><div class="k">Short</div><div class="v">${s.short}</div></div>
+  </div>`;
+}
+function tileHTML(id, title, sub, s){
+  return `<div class="tile" data-open="${id}">
+    <div class="acts">
+      <button class="ghost" data-edit="${id}" title="Rename">✎</button>
+      <button class="ghost danger" data-del="${id}" title="Delete">✕</button>
+    </div>
+    <h3>${esc(title)}</h3>
+    <div class="sub">${sub}</div>
+    <div class="nums">
+      <div><span>Req</span><b>${s.required}</b></div>
+      <div><span>Present</span><b>${s.present}</b></div>
+      <div class="s ${s.short===0?"zero":""}"><span>Short</span><b>${s.short}</b></div>
+    </div>
+  </div>`;
+}
+function plural(n, word){ return `${n} ${word}${n===1?"":"s"}`; }
+
+/* ---------- PAGE 1: Teams ---------- */
+function renderTeams(){
+  const tiles = data.teams.map(t => tileHTML(t.id, t.name, plural(t.departments.length,"department"), sumTeam(t))).join("");
+  app.innerHTML = `
+    <div class="crumbs"><span>Teams</span></div>
+    <div class="bar"><h2>Teams</h2><button class="primary" id="add">+ Add Team</button></div>
+    ${summaryHTML(sumAll())}
+    ${data.teams.length ? `<div class="grid">${tiles}</div>` : `<div class="empty">No teams yet. Click <b>+ Add Team</b> to create one (e.g. MEP, FACADE).</div>`}`;
+
+  app.querySelector("#add").onclick = async () => {
+    const v = await askName("Add Team", "Team name", "", "e.g. MEP");
+    if(v){ data.teams.push({id:uid(), name:v, departments:[]}); save(); route(); }
+  };
+  bindTiles(data.teams, id => go(`#/team/${id}`), "team",
+            t => `Delete team "${t.name}" and all its departments and contractors?`);
+}
+
+/* ---------- PAGE 2: Departments ---------- */
+function renderDepartments(team){
+  const tiles = team.departments.map(d => tileHTML(d.id, d.name, plural(d.contractors.length,"contractor"), sumDept(d))).join("");
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Teams</a> › <span>${esc(team.name)}</span></div>
+    <div class="bar"><h2>${esc(team.name)} — Departments</h2><button class="primary" id="add">+ Add Department</button></div>
+    ${summaryHTML(sumTeam(team))}
+    ${team.departments.length ? `<div class="grid">${tiles}</div>` : `<div class="empty">No departments in ${esc(team.name)} yet. Click <b>+ Add Department</b> (e.g. Electrical, HVAC).</div>`}`;
+
+  app.querySelector("#add").onclick = async () => {
+    const v = await askName("Add Department", "Department name", "", "e.g. Electrical");
+    if(v){ team.departments.push({id:uid(), name:v, contractors:[]}); save(); route(); }
+  };
+  bindTiles(team.departments, id => go(`#/team/${team.id}/dept/${id}`), "department",
+            d => `Delete department "${d.name}" and all its contractors?`);
+}
+
+function bindTiles(list, open, label, confirmText){
+  app.querySelectorAll("[data-open]").forEach(el => el.onclick = () => open(el.dataset.open));
+  app.querySelectorAll("[data-edit]").forEach(el => el.onclick = async e => {
+    e.stopPropagation();
+    const item = list.find(x=>x.id===el.dataset.edit);
+    const v = await askName(`Rename ${label}`, `${label[0].toUpperCase()+label.slice(1)} name`, item.name);
+    if(v){ item.name = v; save(); route(); }
+  });
+  app.querySelectorAll("[data-del]").forEach(el => el.onclick = async e => {
+    e.stopPropagation();
+    const i = list.findIndex(x=>x.id===el.dataset.del);
+    if(await askConfirm(confirmText(list[i]))){ list.splice(i,1); save(); route(); }
+  });
+}
+
+/* ---------- PAGE 3: Contractors ---------- */
+function renderContractors(team, dept){
+  const rows = dept.contractors.map(c => {
+    const s = shortOf(c), extra = c.present - c.required;
+    const pill = s > 0 ? `<span class="pill bad">${s}</span>`
+               : extra > 0 ? `<span class="pill over" title="${extra} more than required">0 (+${extra})</span>`
+               : `<span class="pill ok">0</span>`;
+    return `<tr data-id="${c.id}">
+      <td><b>${esc(c.name)}</b></td>
+      <td class="num"><input type="number" min="0" step="1" inputmode="numeric" data-f="required" value="${c.required}" aria-label="Required manpower for ${esc(c.name)}"></td>
+      <td class="num"><input type="number" min="0" step="1" inputmode="numeric" data-f="present" value="${c.present}" aria-label="Present manpower for ${esc(c.name)}"></td>
+      <td class="num" data-short>${pill}</td>
+      <td class="num" style="white-space:nowrap">
+        <button class="ghost" data-edit title="Rename">✎</button>
+        <button class="ghost danger" data-del title="Delete">✕</button>
+      </td>
+    </tr>`;
+  }).join("");
+  const tot = sumDept(dept);
+
+  app.innerHTML = `
+    <div class="crumbs"><a href="#/">Teams</a> › <a href="#/team/${team.id}">${esc(team.name)}</a> › <span>${esc(dept.name)}</span></div>
+    <div class="bar"><h2>${esc(dept.name)} — Contractors</h2><button class="primary" id="add">+ Add Contractor</button></div>
+    <div id="sum">${summaryHTML(tot)}</div>
+    ${dept.contractors.length ? `
+    <div class="tablewrap"><table>
+      <thead><tr><th>Contractor<span class="lg"> Name</span></th><th class="num">Required<span class="lg"> Manpower</span></th><th class="num">Present<span class="lg"> Manpower</span></th><th class="num">Short<span class="lg"> Manpower</span></th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td>Total</td><td class="num" id="tReq">${tot.required}</td><td class="num" id="tPre">${tot.present}</td><td class="num" id="tSho">${tot.short}</td><td></td></tr></tfoot>
+    </table></div>
+    <div class="hint">Type in Required or Present — Short updates on its own and is saved automatically.</div>`
+    : `<div class="empty">No contractors in ${esc(dept.name)} yet. Click <b>+ Add Contractor</b> (e.g. Ram, Shyam).</div>`}`;
+
+  app.querySelector("#add").onclick = async () => {
+    const c = await askContractor();
+    if(c){ dept.contractors.push({id:uid(), ...c}); save(); route(); }
+  };
+
+  app.querySelectorAll("tbody tr").forEach(tr => {
+    const c = dept.contractors.find(x=>x.id===tr.dataset.id);
+    tr.querySelectorAll("input").forEach(inp => inp.oninput = () => {
+      c[inp.dataset.f] = num(inp.value);
+      save();
+      const s = shortOf(c), extra = c.present - c.required;
+      tr.querySelector("[data-short]").innerHTML = s > 0 ? `<span class="pill bad">${s}</span>`
+        : extra > 0 ? `<span class="pill over" title="${extra} more than required">0 (+${extra})</span>` : `<span class="pill ok">0</span>`;
+      const t = sumDept(dept);
+      app.querySelector("#sum").innerHTML = summaryHTML(t);
+      app.querySelector("#tReq").textContent = t.required;
+      app.querySelector("#tPre").textContent = t.present;
+      app.querySelector("#tSho").textContent = t.short;
+    });
+    tr.querySelector("[data-edit]").onclick = async () => {
+      const v = await askName("Rename contractor", "Contractor name", c.name);
+      if(v){ c.name = v; save(); route(); }
+    };
+    tr.querySelector("[data-del]").onclick = async () => {
+      if(await askConfirm(`Delete contractor "${c.name}"?`)){
+        dept.contractors = dept.contractors.filter(x=>x.id!==c.id); save(); route();
+      }
+    };
+  });
+}
+
+/* ---------- dialogs ---------- */
+const dlg = document.getElementById("dlg");
+function openDialog(title, bodyHTML, okText, collect){
+  return new Promise(resolve => {
+    document.getElementById("dlgTitle").textContent = title;
+    document.getElementById("dlgBody").innerHTML = bodyHTML;
+    document.getElementById("dlgOk").textContent = okText;
+    dlg.onclose = () => resolve(dlg.returnValue === "ok" ? collect() : null);
+    dlg.returnValue = "";
+    dlg.showModal();
+    const first = dlg.querySelector("#dlgBody input"); if(first){ first.focus(); first.select(); }
+  });
+}
+function askName(title, label, value="", placeholder=""){
+  return openDialog(title,
+    `<label for="f1">${label}</label><input id="f1" required maxlength="60" value="${esc(value)}" placeholder="${esc(placeholder)}">`,
+    "Save", () => dlg.querySelector("#f1").value.trim() || null);
+}
+function askContractor(){
+  return openDialog("Add Contractor",
+    `<label for="f1">Contractor name</label><input id="f1" required maxlength="60" placeholder="e.g. Ram">
+     <div class="row">
+       <div><label for="f2">Required manpower</label><input id="f2" type="number" min="0" step="1" value="0" inputmode="numeric"></div>
+       <div><label for="f3">Present manpower</label><input id="f3" type="number" min="0" step="1" value="0" inputmode="numeric"></div>
+     </div>`,
+    "Add", () => {
+      const name = dlg.querySelector("#f1").value.trim();
+      return name ? {name, required:num(dlg.querySelector("#f2").value), present:num(dlg.querySelector("#f3").value)} : null;
+    });
+}
+function askConfirm(text){
+  return openDialog("Please confirm", `<p style="margin:0">${esc(text)}</p>`, "Delete", () => true);
+}
+
+/* ---------- export / import ---------- */
+document.getElementById("btnExport").onclick = () => {
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `manpower-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+};
+const fileImport = document.getElementById("fileImport");
+document.getElementById("btnImport").onclick = () => fileImport.click();
+fileImport.onchange = async () => {
+  const f = fileImport.files[0]; fileImport.value = "";
+  if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!d || !Array.isArray(d.teams)) throw 0;
+    if(await askConfirm("Replace all current data with this file?")){ data = d; save(); go("#/"); route(); }
+  }catch(e){ await openDialog("Import failed", "<p style='margin:0'>That file isn't a Manpower Implement backup.</p>", "OK", ()=>null); }
+};
+
+route();
+</script>
+</body>
+</html>
