@@ -431,7 +431,9 @@ async function api(action, extra = {}){
     return j;
   } finally { busy(-1); }
 }
+let dataVer = null;
 function applyState(st){
+  dataVer = st.ver || null;
   data = {teams: st.teams || [], users: st.users || [], history: st.history || {}, today: st.today};
   me = st.me || null;
   hasAdmin = st.hasAdmin !== false;
@@ -457,11 +459,12 @@ setInterval(async () => {
   if(!me || document.hidden || pending > 0 || dlg.open) return;
   const a = document.activeElement; if(a && a.tagName === "INPUT") return;
   try{
-    const r = await api("state");
+    const r = await api("state", {since: dataVer});        // tiny check; full data only when something changed
+    if(r.same) return;
     const before = lastStateJSON; applyState(r.state);
     if(lastStateJSON !== before) route();
   }catch(e){}
-}, 30000);
+}, 45000);
 
 const isAdmin = () => me && me.role === "admin";
 function logout(){ setToken(""); me = null; showApp(); }

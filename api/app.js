@@ -1,107 +1,138 @@
 /* ============================================================
    Manpower Implement — server API (Vercel serverless function)
    One endpoint: POST /api/app  { action, ... }   (GET ?action=state also works)
-   Storage: one private JSON document in Vercel Blob, written with
-   optimistic locking (ifMatch) so two people saving at once never
-   overwrite each other.
+   Storage: Upstash Redis (free on Vercel → Storage → Upstash for Redis).
+     mi:main  = teams, users, admin (one JSON value)
+     mi:ver   = version number, raised on every save
+     mi:days  = hash of saved days (YYYY-MM-DD → JSON) for the Store
+   Every save is a single atomic step that only succeeds if nobody else
+   saved in between, so two people saving at once never overwrite each other.
+   Data saved earlier in Vercel Blob is copied across automatically once.
    ============================================================ */
 import crypto from "node:crypto";
 
-// The login-signing key is created once and kept inside the private data file (or AUTH_SECRET if set).
-const DB_PATH = "manpower/db.json";
+// The login-signing key is created once and kept with the data (or AUTH_SECRET if set).
 const keyOf = db => process.env.AUTH_SECRET || db.secret;
-// Vercel may name the storage variables with a custom prefix (e.g. MYSTORE_READ_WRITE_TOKEN), so look for any of them
-const envFind = (re, prefix) => { for(const [k, v] of Object.entries(process.env)) if(re.test(k) && v && (!prefix || String(v).startsWith(prefix))) return v; return ""; };
-const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || envFind(/READ_WRITE_TOKEN$/, "vercel_blob_rw_");
+// Vercel may give storage variables a custom prefix, so look for any matching name
+const envFind = (re, skip) => { for(const [k, v] of Object.entries(process.env)) if(re.test(k) && v && !(skip && skip.test(k))) return v; return ""; };
+const R_URL = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || envFind(/(KV_REST_API_URL|REDIS_REST_URL)$/)).replace(/\/+$/, "");
+const R_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || envFind(/(KV_REST_API_TOKEN|REDIS_REST_TOKEN)$/, /READ_ONLY/);
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || envFind(/READ_WRITE_TOKEN$/);
 const BLOB_STORE = process.env.BLOB_STORE_ID || envFind(/BLOB_STORE_ID$/);
-const blobAuth = () => BLOB_TOKEN ? {token: BLOB_TOKEN} : (BLOB_STORE && process.env.BLOB_STORE_ID === undefined ? {storeId: BLOB_STORE} : {});
-const storageReady = () => !!(process.env.MI_LOCAL_DB || BLOB_TOKEN || BLOB_STORE);
+const LOCAL = process.env.MI_LOCAL_DB;          // set only when testing on a computer
+const storageReady = () => !!(LOCAL || (R_URL && R_TOKEN));
+const NOT_READY = "Database not connected yet. In Vercel: Storage → Create → Upstash for Redis (free) → connect it to this project → Redeploy.";
 const TOKEN_DAYS = 30;
+const K = {main: "mi:main", ver: "mi:ver", days: "mi:days"};
 
-/* ---------- storage (Vercel Blob in production, a local file for testing) ---------- */
-let blob = null;
-async function blobLib(){ return blob || (blob = await import("@vercel/blob")); }
-const LOCAL = process.env.MI_LOCAL_DB;   // set only when testing on a computer
-let localLock = Promise.resolve();
-
-/* Storage can return the version from just before a save for a short time. Every save carries a
-   version number (db.v), and this server instance remembers the newest copy it has saved itself,
-   so it never works from an older copy than the one it just wrote. */
-let mem = null;                                  // {db, etag} of the newest copy this instance saved
-const clone = o => JSON.parse(JSON.stringify(o));
-function newest(fetched){
-  if(mem && (mem.db.v || 0) > (fetched.db.v || 0)) return {db: clone(mem.db), etag: mem.etag};
-  return fetched;
+/* ---------- Redis over HTTPS (Upstash REST API) ---------- */
+async function redis(cmds){
+  const r = await fetch(R_URL + "/pipeline", {method: "POST", headers: {Authorization: "Bearer " + R_TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(cmds)});
+  if(!r.ok) throw new Error("Database error " + r.status + ": " + (await r.text()).slice(0, 200));
+  const out = await r.json();
+  return out.map(x => { if(x && x.error) throw new Error("Database error: " + x.error); return x ? x.result : null; });
 }
-let staleTest = null;                            // test mode only: imitate a briefly out-of-date read
-async function readDB(){
-  if(LOCAL){
-    const fs = await import("node:fs/promises");
-    let t;
-    try{ t = await fs.readFile(LOCAL, "utf8"); }catch(e){ if(e.code === "ENOENT") return newest({db: emptyDB(), etag: null}); throw e; }
-    if(staleTest && Date.now() - staleTest.at < Number(process.env.MI_TEST_STALE_MS)) t = staleTest.prev;
-    return newest({db: JSON.parse(t), etag: crypto.createHash("md5").update(t).digest("hex")});
+// save main + version + changed days in ONE atomic step, only if the version is still the one we read
+const CAS = `
+if (redis.call('GET', KEYS[2]) or '0') ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[1], ARGV[2])
+redis.call('SET', KEYS[2], ARGV[3])
+local n = tonumber(ARGV[4]); local i = 5
+for j = 1, n do redis.call('HSET', KEYS[3], ARGV[i], ARGV[i+1]); i = i + 2 end
+local m = tonumber(ARGV[i]); i = i + 1
+for j = 1, m do redis.call('HDEL', KEYS[3], ARGV[i]); i = i + 1 end
+return 1`;
+
+/* ---------- backends: load() → {main, ver, days}, cas(...) → true/false ---------- */
+const remote = {
+  async load(){
+    const [main, ver, flat] = await redis([["GET", K.main], ["GET", K.ver], ["HGETALL", K.days]]);
+    const days = {}; for(let i = 0; i < (flat || []).length; i += 2) days[flat[i]] = flat[i+1];
+    return {main, ver: ver || "0", days};
+  },
+  async ver(){ const [v] = await redis([["GET", K.ver]]); return v || "0"; },
+  async cas(expect, main, next, sets, dels){
+    const args = [expect, main, next, String(sets.length / 2), ...sets, String(dels.length), ...dels];
+    const [ok] = await redis([["EVAL", CAS, "3", K.main, K.ver, K.days, ...args]]);
+    return Number(ok) === 1;
   }
-  const { get } = await blobLib();
-  const r = await withAccess(access => get(DB_PATH, {access, useCache: false, ...blobAuth()}));
-  if(!r || r.statusCode !== 200) return newest({db: emptyDB(), etag: null});
-  const text = await new Response(r.stream).text();
-  return newest({db: JSON.parse(text), etag: r.blob.etag});   // a damaged file throws: we never save over it with empty data
-}
-async function writeDB(db, etag){
-  db.v = (db.v || 0) + 1;
-  const body = JSON.stringify(db);
-  if(LOCAL){
-    // test mode only: compare-and-swap done under a lock, written atomically (temp file + rename)
+};
+let localLock = Promise.resolve();
+const local = {                                   // test mode: same behaviour, kept in a file
+  async read(){ const fs = await import("node:fs/promises"); try{ return JSON.parse(await fs.readFile(LOCAL, "utf8")); }catch(e){ if(e.code === "ENOENT") return {main: null, ver: "0", days: {}}; throw e; } },
+  async load(){ return this.read(); },
+  async ver(){ return (await this.read()).ver; },
+  async cas(expect, main, next, sets, dels){
     const fs = await import("node:fs/promises");
-    const prev = localLock; let release; localLock = new Promise(r => release = r);
-    await prev;
+    const prev = localLock; let release; localLock = new Promise(r => release = r); await prev;
     try{
-      let cur = null; try{ cur = await fs.readFile(LOCAL, "utf8"); }catch(e){}
-      const curTag = cur === null ? null : crypto.createHash("md5").update(cur).digest("hex");
-      if(curTag !== etag){ db.v--; const e = new Error("conflict"); e.conflict = true; throw e; }
-      await fs.writeFile(LOCAL + ".tmp", body); await fs.rename(LOCAL + ".tmp", LOCAL);
-      if(process.env.MI_TEST_STALE_MS && cur !== null) staleTest = {prev: cur, at: Date.now()};
-      mem = {db: clone(db), etag: crypto.createHash("md5").update(body).digest("hex")}; return;
+      const cur = await this.read();
+      if(cur.ver !== expect) return false;
+      cur.main = main; cur.ver = next;
+      for(let i = 0; i < sets.length; i += 2) cur.days[sets[i]] = sets[i+1];
+      dels.forEach(k => delete cur.days[k]);
+      await fs.writeFile(LOCAL + ".tmp", JSON.stringify(cur)); await fs.rename(LOCAL + ".tmp", LOCAL);
+      return true;
     } finally { release(); }
   }
-  const { put, BlobPreconditionFailedError } = await blobLib();
+};
+const store = () => LOCAL ? local : remote;
+
+/* ---------- one-time copy of data saved earlier in Vercel Blob ---------- */
+async function blobData(){
+  if(process.env.MI_TEST_BLOB){ const fs = await import("node:fs/promises"); return JSON.parse(await fs.readFile(process.env.MI_TEST_BLOB, "utf8")); }  // tests only
+  if(LOCAL || !(BLOB_TOKEN || BLOB_STORE)) return null;
   try{
-    const out = await withAccess(access => put(DB_PATH, body, {access, contentType: "application/json", addRandomSuffix: false,
-      allowOverwrite: true, cacheControlMaxAge: 60, ...(etag ? {ifMatch: etag} : {}), ...blobAuth()}));
-    mem = {db: clone(db), etag: out && out.etag};
-  }catch(e){
-    db.v--;
-    if(e instanceof BlobPreconditionFailedError || /precondition/i.test(e.message || "")){ mem = null; const c = new Error("conflict"); c.conflict = true; throw c; }
-    throw e;
-  }
-}
-/* Works whether the Blob store was created as Private (preferred) or Public */
-let access = process.env.BLOB_ACCESS || "private";
-async function withAccess(fn){
-  try{ return await fn(access); }
-  catch(e){
-    const msg = String(e && e.message || "");
-    if(/access|public|private/i.test(msg) && !/precondition/i.test(msg)){
-      access = access === "private" ? "public" : "private";
-      return await fn(access);
+    const { get } = await import("@vercel/blob");
+    const auth = BLOB_TOKEN ? {token: BLOB_TOKEN} : {};
+    for(const access of ["private", "public"]){
+      try{
+        const r = await get("manpower/db.json", {access, useCache: false, ...auth});
+        if(r && r.statusCode === 200) return JSON.parse(await new Response(r.stream).text());
+        if(r === null) return null;
+      }catch(e){}
     }
-    throw e;
-  }
+  }catch(e){ console.error("blob copy skipped", e); }
+  return null;
 }
-/* read → change → write, retrying if someone else saved in between */
-async function transact(fn){
-  const waits = [120, 250, 450, 700, 1000, 1400, 1800, 2200];   // ~8 s in total before giving up
-  for(let i = 0; i <= waits.length; i++){
-    const {db, etag} = await readDB();
-    const out = await fn(db);
-    if(out && out.noWrite) return {db, out};
-    try{ await writeDB(db, etag); return {db, out}; }
-    catch(e){ if(!e.conflict || i === waits.length) { if(e.conflict) break; throw e; } await new Promise(r => setTimeout(r, waits[i] + Math.random()*150)); }
-  }
-  throw httpErr(503, "The server is busy. Please try again.");
-}
+
+/* ---------- read / write the whole data set ---------- */
 function emptyDB(){ return {teams: [], users: [], admin: null, history: {}}; }
+async function readDB(){
+  let {main, ver, days} = await store().load();
+  if(!main && ver === "0"){                         // empty database: bring over earlier data once
+    const old = await blobData();
+    if(old && (old.admin || (old.teams || []).length)){
+      const {history = {}, ...rest} = old; delete rest.v;
+      const sets = []; for(const [k, rec] of Object.entries(history)) sets.push(k, JSON.stringify(rec));
+      await store().cas("0", JSON.stringify(rest), "1", sets, []);
+      ({main, ver, days} = await store().load());
+    }
+  }
+  const db = main ? JSON.parse(main) : emptyDB();
+  db.history = {}; for(const [k, v] of Object.entries(days || {})) db.history[k] = JSON.parse(v);
+  return {db, etag: ver, orig: days || {}};
+}
+async function writeDB(db, ver, orig){
+  const {history = {}, ...main} = db;
+  const sets = [], dels = [];
+  for(const [k, rec] of Object.entries(history)){ const j = JSON.stringify(rec); if(orig[k] !== j) sets.push(k, j); }
+  for(const k of Object.keys(orig)) if(!(k in history)) dels.push(k);
+  const ok = await store().cas(ver, JSON.stringify(main), String(Number(ver) + 1), sets, dels);
+  if(!ok){ const e = new Error("conflict"); e.conflict = true; throw e; }
+  return String(Number(ver) + 1);
+}
+/* read → change → save; if someone else saved in between, read again and redo the change */
+async function transact(fn){
+  for(let i = 0; i < 12; i++){
+    const {db, etag, orig} = await readDB();
+    const out = await fn(db);
+    if(out && out.noWrite) return {db, out, ver: etag};
+    try{ const ver = await writeDB(db, etag, orig); return {db, out, ver}; }
+    catch(e){ if(!e.conflict) throw e; await new Promise(r => setTimeout(r, 30 + Math.random() * 120 * (i + 1))); }
+  }
+  throw httpErr(503, "Too many people are saving at this moment. Please try again.");
+}
 
 /* ---------- helpers ---------- */
 function httpErr(status, msg){ const e = new Error(msg); e.status = status; return e; }
@@ -319,40 +350,39 @@ export default async function handler(req, res){
     const b = req.method === "GET" ? {action: (req.query && req.query.action) || "state"} : await readBody(req);
     const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
 
+    if(b.action === "check"){                       // setup help: names of storage settings only, never values
+      return send(res, 200, {database: storageReady(), oldBlobStorage: !!(BLOB_TOKEN || BLOB_STORE),
+        names: Object.keys(process.env).filter(k => /BLOB|KV_|REDIS|UPSTASH/i.test(k)).sort()});
+    }
+    if(!storageReady()) throw httpErr(500, NOT_READY);
     if(b.action === "status"){
-      if(!storageReady()) throw httpErr(500, "Storage is not connected yet. In Vercel: Storage → create a Blob store → connect it to this project → Redeploy.");
       const {db} = await readDB();
       return send(res, 200, {hasAdmin: !!db.admin, today: todayKey()});
     }
-    if(b.action === "check"){                       // setup help: names of storage settings only, never values
-      return send(res, 200, {storage: storageReady(), via: BLOB_TOKEN ? "token" : BLOB_STORE ? "store id" : "none",
-        names: Object.keys(process.env).filter(k => /BLOB|VERCEL_OIDC/i.test(k)).sort()});
-    }
-    if(!storageReady()) throw httpErr(500, "Storage is not connected yet. In Vercel: Storage → create a Blob store → connect it to this project → Redeploy.");
     if(b.action === "setup"){                       // first admin, only while none exists
-      const {db, out} = await transact(db => {
+      const {db, ver} = await transact(db => {
         if(db.admin) throw httpErr(409, "Admin already exists. Please log in.");
         const {username, pw} = checkUserInput(db, b, "admin", true);
         db.admin = {username, pw: hashPw(pw)};
         if(!db.secret) db.secret = crypto.randomBytes(32).toString("hex");
       });
-      return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
+      return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: {...viewFor(db, {role: "admin"}), ver}});
     }
     if(b.action === "login"){
       const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0];
       const tries = loginTries.get(ip) || 0;
       if(tries > 4) await new Promise(r => setTimeout(r, Math.min(tries, 10) * 400));
-      const {db} = await readDB();
+      const {db, etag: ver} = await readDB();
       const u = clean(b.username, 40).toLowerCase(), p = String(b.password || "");
       if(db.admin && db.admin.username.toLowerCase() === u && checkPw(db.admin.pw, p)){
         loginTries.delete(ip);
-        return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
+        return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: {...viewFor(db, {role: "admin"}), ver}});
       }
       const user = db.users.find(x => x.username.toLowerCase() === u);
       if(user && checkPw(user.pw, p)){
         loginTries.delete(ip);
         if(!scopeLabel(db, user.scope)) throw httpErr(403, "This user's team/department/contractor no longer exists. Ask the admin.");
-        return send(res, 200, {token: sign(db, user.id, user.pw.salt.slice(0,8)), state: viewFor(db, {role: "user", user})});
+        return send(res, 200, {token: sign(db, user.id, user.pw.salt.slice(0,8)), state: {...viewFor(db, {role: "user", user}), ver}});
       }
       loginTries.set(ip, tries + 1);
       throw httpErr(401, "Wrong User ID or password.");
@@ -360,12 +390,14 @@ export default async function handler(req, res){
 
     // everything below needs a valid login
     if(b.action === "state"){
-      const {db} = await readDB();
+      // quick check used by open screens: if nothing changed since the version they have, say so (1 small read)
+      if(b.since && String(b.since) === await store().ver()) return send(res, 200, {same: true});
+      const {db, etag} = await readDB();
       const me = whoIs(db, token); if(!me) throw httpErr(401, "Please log in again.");
-      return send(res, 200, {state: viewFor(db, me)});
+      return send(res, 200, {state: {...viewFor(db, me), ver: etag}});
     }
     if(b.action === "op"){
-      const {db, out} = await transact(db => {
+      const {db, out, ver} = await transact(db => {
         const me = whoIs(db, token); if(!me) throw httpErr(401, "Please log in again.");
         applyOp(db, me, b.op || {});
         return {me};
@@ -373,7 +405,7 @@ export default async function handler(req, res){
       // re-check the login against the saved data (e.g. admin changed their own password → new token)
       const me = whoIs(db, token);
       const fresh = !me && out.me.role === "admin" ? {token: sign(db, "admin", db.admin.pw.salt.slice(0,8))} : {};
-      return send(res, 200, {state: viewFor(db, me || out.me), ...fresh});
+      return send(res, 200, {state: {...viewFor(db, me || out.me), ver}, ...fresh});
     }
     throw httpErr(400, "Unknown request.");
   }catch(e){

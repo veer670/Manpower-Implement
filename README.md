@@ -13,12 +13,14 @@ Contractor manpower tracker for Homeland site teams.
 
 1. Push this repo to GitHub.
 2. Vercel → **Add New → Project** → import `veer670/Manpower-Implement` → Framework: **Other** → **Deploy**.
-3. In the project: **Storage → Create → Blob** → access **Private** → **Connect** it to this project (all environments).
+3. In the project: **Storage → Create → Upstash for Redis** (free plan) → **Connect** it to this project (all environments).
 4. **Deployments → ⋯ → Redeploy** so the new storage is picked up.
 5. Open the project link → create the Admin login → **More › User ID → Create User** for each person.
 
 The server (`api/app.js`) checks every login and every change, and sends each user only the Team, Department
-or Contractor assigned to them. Data is one private JSON file in Vercel Blob, saved with conflict protection.
+or Contractor assigned to them. Data lives in Upstash Redis; every save is one atomic step that only succeeds
+if nobody else saved in between (no lost updates). Data from the earlier Vercel Blob setup is copied across once.
+Check the connection at `/api/app?action=check`.
 
 ## Local copy
 
