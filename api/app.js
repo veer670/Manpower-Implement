@@ -1,10 +1,9 @@
 /* ============================================================
    Manpower Implement — server API (Vercel serverless function)
    One endpoint: POST /api/app  { action, ... }   (GET ?action=state also works)
-   Storage: Upstash Redis (free on Vercel → Storage → Upstash for Redis).
-     mi:main  = teams, users, admin (one JSON value)
-     mi:ver   = version number, raised on every save
-     mi:days  = hash of saved days (YYYY-MM-DD → JSON) for the Store
+   Storage (whichever is connected in Vercel → Storage):
+     • Neon Postgres  — tables mi_meta (version + teams/users/admin) and mi_days (one row per saved day)
+     • Upstash Redis  — keys mi:main, mi:ver, mi:days
    Every save is a single atomic step that only succeeds if nobody else
    saved in between, so two people saving at once never overwrite each other.
    Data saved earlier in Vercel Blob is copied across automatically once.
@@ -20,8 +19,10 @@ const R_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || envFind(/READ_WRITE_TOKEN$/);
 const BLOB_STORE = process.env.BLOB_STORE_ID || envFind(/BLOB_STORE_ID$/);
 const LOCAL = process.env.MI_LOCAL_DB;          // set only when testing on a computer
-const storageReady = () => !!(LOCAL || (R_URL && R_TOKEN));
-const NOT_READY = "Database not connected yet. In Vercel: Storage → Create → Upstash for Redis (free) → connect it to this project → Redeploy.";
+// Neon (Postgres): Vercel sets DATABASE_URL / POSTGRES_URL (sometimes with a prefix); prefer the pooled one
+const PG_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || envFind(/(DATABASE_URL|POSTGRES_URL)$/, /UNPOOLED|NON_POOLING|NO_SSL/);
+const storageReady = () => !!(LOCAL || PG_URL || (R_URL && R_TOKEN));
+const NOT_READY = "Database not connected yet. In Vercel: Storage → Create → Neon (Postgres) or Upstash for Redis → connect it to this project → Redeploy.";
 const TOKEN_DAYS = 30;
 const K = {main: "mi:main", ver: "mi:ver", days: "mi:days"};
 
@@ -57,6 +58,47 @@ const remote = {
     return Number(ok) === 1;
   }
 };
+/* Neon / Postgres: one row of meta + one row per day. The save is ONE SQL statement: it updates the
+   version only if it is still the one we read, and changes the day rows only when that update happened. */
+let pool = null, pgReady = false;
+async function pgq(text, params){
+  if(!pool){
+    const { default: pg } = await import("pg");
+    // Neon adds "channel_binding=require" to its links; this library version rejects that setting, so drop it
+    const url = PG_URL.replace(/([?&])channel_binding=[^&]*&?/i, "$1").replace(/[?&]$/, "");
+    pool = new pg.Pool({connectionString: url, max: 3, idleTimeoutMillis: 10000, connectionTimeoutMillis: 10000});
+    pool.on("error", () => {});
+  }
+  if(!pgReady){
+    for(let i = 0; i < 3 && !pgReady; i++){
+      try{
+        await pool.query(`CREATE TABLE IF NOT EXISTS mi_meta (id int PRIMARY KEY, ver bigint NOT NULL, main text);
+                          CREATE TABLE IF NOT EXISTS mi_days (day text PRIMARY KEY, rec text NOT NULL);
+                          INSERT INTO mi_meta (id, ver, main) VALUES (1, 0, NULL) ON CONFLICT (id) DO NOTHING;`);
+        pgReady = true;
+      }catch(e){ if(i === 2) throw e; await new Promise(r => setTimeout(r, 200)); }   // two first requests at once
+    }
+  }
+  return pool.query(text, params);
+}
+const postgres = {
+  async load(){
+    const r = await pgq(`SELECT m.ver::text AS ver, m.main, (SELECT json_object_agg(day, rec) FROM mi_days) AS days
+                         FROM mi_meta m WHERE m.id = 1`);
+    const row = r.rows[0] || {};
+    return {main: row.main || null, ver: row.ver || "0", days: row.days || {}};
+  },
+  async ver(){ const r = await pgq("SELECT ver::text AS ver FROM mi_meta WHERE id = 1"); return (r.rows[0] && r.rows[0].ver) || "0"; },
+  async cas(expect, main, next, sets, dels){
+    const setObj = {}; for(let i = 0; i < sets.length; i += 2) setObj[sets[i]] = sets[i+1];
+    const r = await pgq(`WITH upd AS (UPDATE mi_meta SET ver = $3::bigint, main = $2 WHERE id = 1 AND ver = $1::bigint RETURNING 1),
+      ins AS (INSERT INTO mi_days (day, rec) SELECT t.key, t.value FROM jsonb_each_text($4::jsonb) AS t
+              WHERE EXISTS (SELECT 1 FROM upd) ON CONFLICT (day) DO UPDATE SET rec = EXCLUDED.rec RETURNING 1),
+      del AS (DELETE FROM mi_days WHERE day = ANY($5::text[]) AND EXISTS (SELECT 1 FROM upd) RETURNING 1)
+      SELECT (SELECT count(*) FROM upd)::int AS ok`, [expect, main, next, JSON.stringify(setObj), dels]);
+    return r.rows[0].ok === 1;
+  }
+};
 let localLock = Promise.resolve();
 const local = {                                   // test mode: same behaviour, kept in a file
   async read(){ const fs = await import("node:fs/promises"); try{ return JSON.parse(await fs.readFile(LOCAL, "utf8")); }catch(e){ if(e.code === "ENOENT") return {main: null, ver: "0", days: {}}; throw e; } },
@@ -76,7 +118,7 @@ const local = {                                   // test mode: same behaviour, 
     } finally { release(); }
   }
 };
-const store = () => LOCAL ? local : remote;
+const store = () => LOCAL ? local : PG_URL ? postgres : remote;
 
 /* ---------- one-time copy of data saved earlier in Vercel Blob ---------- */
 async function blobData(){
@@ -351,8 +393,9 @@ export default async function handler(req, res){
     const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
 
     if(b.action === "check"){                       // setup help: names of storage settings only, never values
-      return send(res, 200, {database: storageReady(), oldBlobStorage: !!(BLOB_TOKEN || BLOB_STORE),
-        names: Object.keys(process.env).filter(k => /BLOB|KV_|REDIS|UPSTASH/i.test(k)).sort()});
+      return send(res, 200, {database: storageReady(), using: LOCAL ? "test file" : PG_URL ? "Neon Postgres" : (R_URL && R_TOKEN) ? "Upstash Redis" : "none",
+        oldBlobStorage: !!(BLOB_TOKEN || BLOB_STORE),
+        names: Object.keys(process.env).filter(k => /BLOB|KV_|REDIS|UPSTASH|DATABASE|POSTGRES|PGHOST|NEON/i.test(k)).sort()});
     }
     if(!storageReady()) throw httpErr(500, NOT_READY);
     if(b.action === "status"){
