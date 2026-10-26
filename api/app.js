@@ -24,20 +24,32 @@ async function blobLib(){ return blob || (blob = await import("@vercel/blob")); 
 const LOCAL = process.env.MI_LOCAL_DB;   // set only when testing on a computer
 let localLock = Promise.resolve();
 
+/* Storage can return the version from just before a save for a short time. Every save carries a
+   version number (db.v), and this server instance remembers the newest copy it has saved itself,
+   so it never works from an older copy than the one it just wrote. */
+let mem = null;                                  // {db, etag} of the newest copy this instance saved
+const clone = o => JSON.parse(JSON.stringify(o));
+function newest(fetched){
+  if(mem && (mem.db.v || 0) > (fetched.db.v || 0)) return {db: clone(mem.db), etag: mem.etag};
+  return fetched;
+}
+let staleTest = null;                            // test mode only: imitate a briefly out-of-date read
 async function readDB(){
   if(LOCAL){
     const fs = await import("node:fs/promises");
     let t;
-    try{ t = await fs.readFile(LOCAL, "utf8"); }catch(e){ if(e.code === "ENOENT") return {db: emptyDB(), etag: null}; throw e; }
-    return {db: JSON.parse(t), etag: crypto.createHash("md5").update(t).digest("hex")};   // a damaged file is an error, never "empty"
+    try{ t = await fs.readFile(LOCAL, "utf8"); }catch(e){ if(e.code === "ENOENT") return newest({db: emptyDB(), etag: null}); throw e; }
+    if(staleTest && Date.now() - staleTest.at < Number(process.env.MI_TEST_STALE_MS)) t = staleTest.prev;
+    return newest({db: JSON.parse(t), etag: crypto.createHash("md5").update(t).digest("hex")});
   }
   const { get } = await blobLib();
   const r = await withAccess(access => get(DB_PATH, {access, useCache: false, ...blobAuth()}));
-  if(!r || r.statusCode !== 200) return {db: emptyDB(), etag: null};
+  if(!r || r.statusCode !== 200) return newest({db: emptyDB(), etag: null});
   const text = await new Response(r.stream).text();
-  return {db: JSON.parse(text), etag: r.blob.etag};      // a damaged file throws: we never save over it with empty data
+  return newest({db: JSON.parse(text), etag: r.blob.etag});   // a damaged file throws: we never save over it with empty data
 }
 async function writeDB(db, etag){
+  db.v = (db.v || 0) + 1;
   const body = JSON.stringify(db);
   if(LOCAL){
     // test mode only: compare-and-swap done under a lock, written atomically (temp file + rename)
@@ -47,16 +59,20 @@ async function writeDB(db, etag){
     try{
       let cur = null; try{ cur = await fs.readFile(LOCAL, "utf8"); }catch(e){}
       const curTag = cur === null ? null : crypto.createHash("md5").update(cur).digest("hex");
-      if(curTag !== etag){ const e = new Error("conflict"); e.conflict = true; throw e; }
-      await fs.writeFile(LOCAL + ".tmp", body); await fs.rename(LOCAL + ".tmp", LOCAL); return;
+      if(curTag !== etag){ db.v--; const e = new Error("conflict"); e.conflict = true; throw e; }
+      await fs.writeFile(LOCAL + ".tmp", body); await fs.rename(LOCAL + ".tmp", LOCAL);
+      if(process.env.MI_TEST_STALE_MS && cur !== null) staleTest = {prev: cur, at: Date.now()};
+      mem = {db: clone(db), etag: crypto.createHash("md5").update(body).digest("hex")}; return;
     } finally { release(); }
   }
   const { put, BlobPreconditionFailedError } = await blobLib();
   try{
-    await withAccess(access => put(DB_PATH, body, {access, contentType: "application/json", addRandomSuffix: false,
+    const out = await withAccess(access => put(DB_PATH, body, {access, contentType: "application/json", addRandomSuffix: false,
       allowOverwrite: true, cacheControlMaxAge: 60, ...(etag ? {ifMatch: etag} : {}), ...blobAuth()}));
+    mem = {db: clone(db), etag: out && out.etag};
   }catch(e){
-    if(e instanceof BlobPreconditionFailedError || /precondition/i.test(e.message || "")){ const c = new Error("conflict"); c.conflict = true; throw c; }
+    db.v--;
+    if(e instanceof BlobPreconditionFailedError || /precondition/i.test(e.message || "")){ mem = null; const c = new Error("conflict"); c.conflict = true; throw c; }
     throw e;
   }
 }
@@ -75,12 +91,13 @@ async function withAccess(fn){
 }
 /* read → change → write, retrying if someone else saved in between */
 async function transact(fn){
-  for(let i = 0; i < 6; i++){
+  const waits = [120, 250, 450, 700, 1000, 1400, 1800, 2200];   // ~8 s in total before giving up
+  for(let i = 0; i <= waits.length; i++){
     const {db, etag} = await readDB();
     const out = await fn(db);
     if(out && out.noWrite) return {db, out};
     try{ await writeDB(db, etag); return {db, out}; }
-    catch(e){ if(!e.conflict) throw e; await new Promise(r => setTimeout(r, 60 + Math.random()*140)); }
+    catch(e){ if(!e.conflict || i === waits.length) { if(e.conflict) break; throw e; } await new Promise(r => setTimeout(r, waits[i] + Math.random()*150)); }
   }
   throw httpErr(503, "The server is busy. Please try again.");
 }

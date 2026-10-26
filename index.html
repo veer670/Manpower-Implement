@@ -379,7 +379,7 @@
    ============================================================ */
 // Address of the online app (set after it is put on Vercel). The copy opened on a computer
 // (serve.ps1 on port 8000, or the file itself) talks to this online app.
-const ONLINE_URL = "";
+const ONLINE_URL = "https://homeland-manpower.vercel.app";
 const IS_LOCAL_COPY = location.protocol === "file:" || location.port === "8000";
 const ONLINE = IS_LOCAL_COPY ? ONLINE_URL : location.origin;
 const API = (IS_LOCAL_COPY ? ONLINE_URL : "") + "/api/app";
@@ -418,8 +418,12 @@ async function api(action, extra = {}){
   try{
     let r;
     try{
-      r = await fetch(API, {method: "POST", headers: {"Content-Type": "application/json", "Authorization": "Bearer " + getToken()},
-                            body: JSON.stringify({action, ...extra})});
+      for(let attempt = 0; ; attempt++){
+        r = await fetch(API, {method: "POST", headers: {"Content-Type": "application/json", "Authorization": "Bearer " + getToken()},
+                              body: JSON.stringify({action, ...extra})});
+        if(r.status !== 503 || attempt >= 2) break;           // server busy: wait a moment and try again quietly
+        await new Promise(res => setTimeout(res, 1200 + attempt * 800));
+      }
     }catch(e){ throw new Error(IS_LOCAL_COPY && !ONLINE_URL ? "This copy is not linked to the online app yet. Open the online link instead." : "No internet connection. Your last change was not saved — please try again."); }
     const j = await r.json().catch(() => ({}));
     if(r.status === 401 && action !== "login"){ setToken(""); me = null; showApp(j.error || "Please log in again."); throw Object.assign(new Error(j.error || "Please log in again."), {silent: true}); }
