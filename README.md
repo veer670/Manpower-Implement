@@ -1,22 +1,27 @@
 # Manpower Implement
 
-Contractor manpower tracker for site teams.
+Contractor manpower tracker for Homeland site teams.
 
-**Flow**
+## Pages
 
-1. **Teams** — e.g. MEP, FACADE
-2. **Departments** inside a team — e.g. Electrical, HVAC
-3. **Contractors** inside a department — Contractor Name, Required Manpower, Present Manpower, Short Manpower
+- **Dashboard** – pick any saved date: totals (Contractors, Required, Present, Short), a daily trend chart, and a Team / Department table with attendance %.
+- **Teams → Departments → Contractors** – Sr. No., names, and Required / Present manpower typed straight into the contractor rows. The contractor page shows the live date & time and when that department was last filled.
+- **More → User ID** – admin login, and user IDs limited to one Team, Department or Contractor (view + fill numbers only).
+- **More → Store** – one record per day, saved automatically whenever numbers change. View any day, export a day or all days to Excel (.xlsx).
 
-Short Manpower = Required − Present (never below 0). If more people are present than required, the extra is shown as `0 (+n)`.
-Totals roll up from contractor → department → team → all teams.
+## Online setup (one time, on vercel.com)
 
-## Use
+1. Push this repo to GitHub.
+2. Vercel → **Add New → Project** → import `veer670/Manpower-Implement` → Framework: **Other** → **Deploy**.
+3. In the project: **Storage → Create → Blob** → access **Private** → **Connect** it to this project (all environments).
+4. **Deployments → ⋯ → Redeploy** so the new storage is picked up.
+5. Open the project link → create the Admin login → **More › User ID → Create User** for each person.
 
-Open `index.html` in any browser. No install needed.
+The server (`api/app.js`) checks every login and every change, and sends each user only the Team, Department
+or Contractor assigned to them. Data is one private JSON file in Vercel Blob, saved with conflict protection.
 
-- Add, rename or delete teams, departments and contractors.
-- Edit Required / Present directly in the table; everything saves automatically in the browser.
-- **Export** downloads a JSON backup; **Import** loads one back (use this to move data to another computer).
+## Local copy
 
-> Data is stored in the browser you use (localStorage), so each computer/browser has its own copy until a shared database is added.
+`serve.ps1` serves this folder on http://localhost:8000. Once `ONLINE_URL` in `index.html` is set to the
+Vercel link, the local copy uses the same online data (and offers a one-time upload of data saved in the
+browser before the app went online).
