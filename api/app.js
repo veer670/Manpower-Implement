@@ -7,13 +7,15 @@
    ============================================================ */
 import crypto from "node:crypto";
 
-// Login tokens are signed with AUTH_SECRET if it is set, otherwise with a key derived from the
-// storage token (which only the server has) — so no extra setup step is needed.
-const SECRET = process.env.AUTH_SECRET ||
-  (process.env.BLOB_READ_WRITE_TOKEN ? crypto.createHash("sha256").update("mi-auth:" + process.env.BLOB_READ_WRITE_TOKEN).digest("hex") : "") ||
-  (process.env.MI_LOCAL_DB ? "local-test-secret" : "");
-// File name is derived from the secret too, so it can't be guessed even if the store is public
-const DB_PATH = "manpower/db-" + crypto.createHash("sha256").update("mi-db:" + SECRET).digest("hex").slice(0, 24) + ".json";
+// The login-signing key is created once and kept inside the private data file (or AUTH_SECRET if set).
+const DB_PATH = "manpower/db.json";
+const keyOf = db => process.env.AUTH_SECRET || db.secret;
+// Vercel may name the storage variables with a custom prefix (e.g. MYSTORE_READ_WRITE_TOKEN), so look for any of them
+const envFind = (re, prefix) => { for(const [k, v] of Object.entries(process.env)) if(re.test(k) && v && (!prefix || String(v).startsWith(prefix))) return v; return ""; };
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN || envFind(/READ_WRITE_TOKEN$/, "vercel_blob_rw_");
+const BLOB_STORE = process.env.BLOB_STORE_ID || envFind(/BLOB_STORE_ID$/);
+const blobAuth = () => BLOB_TOKEN ? {token: BLOB_TOKEN} : (BLOB_STORE && process.env.BLOB_STORE_ID === undefined ? {storeId: BLOB_STORE} : {});
+const storageReady = () => !!(process.env.MI_LOCAL_DB || BLOB_TOKEN || BLOB_STORE);
 const TOKEN_DAYS = 30;
 
 /* ---------- storage (Vercel Blob in production, a local file for testing) ---------- */
@@ -30,7 +32,7 @@ async function readDB(){
     return {db: JSON.parse(t), etag: crypto.createHash("md5").update(t).digest("hex")};   // a damaged file is an error, never "empty"
   }
   const { get } = await blobLib();
-  const r = await withAccess(access => get(DB_PATH, {access, useCache: false}));
+  const r = await withAccess(access => get(DB_PATH, {access, useCache: false, ...blobAuth()}));
   if(!r || r.statusCode !== 200) return {db: emptyDB(), etag: null};
   const text = await new Response(r.stream).text();
   return {db: JSON.parse(text), etag: r.blob.etag};      // a damaged file throws: we never save over it with empty data
@@ -52,7 +54,7 @@ async function writeDB(db, etag){
   const { put, BlobPreconditionFailedError } = await blobLib();
   try{
     await withAccess(access => put(DB_PATH, body, {access, contentType: "application/json", addRandomSuffix: false,
-      allowOverwrite: true, cacheControlMaxAge: 60, ...(etag ? {ifMatch: etag} : {})}));
+      allowOverwrite: true, cacheControlMaxAge: 60, ...(etag ? {ifMatch: etag} : {}), ...blobAuth()}));
   }catch(e){
     if(e instanceof BlobPreconditionFailedError || /precondition/i.test(e.message || "")){ const c = new Error("conflict"); c.conflict = true; throw c; }
     throw e;
@@ -103,23 +105,23 @@ function checkPw(rec, pw){
   return want.length === h.length && crypto.timingSafeEqual(h, want);
 }
 // token = base64(id.expiry.version).signature ; version changes when the password changes
-function sign(id, ver){
+function sign(db, id, ver){
   const payload = Buffer.from(`${id}.${Date.now() + TOKEN_DAYS*864e5}.${ver}`).toString("base64url");
-  const sig = crypto.createHmac("sha256", SECRET).update(payload).digest("base64url");
+  const sig = crypto.createHmac("sha256", keyOf(db)).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
-function verify(token){
-  if(!token || typeof token !== "string") return null;
+function verify(db, token){
+  if(!token || typeof token !== "string" || !keyOf(db)) return null;
   const [payload, sig] = token.split(".");
   if(!payload || !sig) return null;
-  const good = crypto.createHmac("sha256", SECRET).update(payload).digest("base64url");
+  const good = crypto.createHmac("sha256", keyOf(db)).update(payload).digest("base64url");
   if(sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return null;
   const [id, exp, ver] = Buffer.from(payload, "base64url").toString().split(".");
   if(Number(exp) < Date.now()) return null;
   return {id, ver};
 }
 function whoIs(db, token){
-  const t = verify(token); if(!t) return null;
+  const t = verify(db, token); if(!t) return null;
   if(t.id === "admin") return db.admin && db.admin.pw.salt.slice(0,8) === t.ver ? {role: "admin"} : null;
   const u = db.users.find(x => x.id === t.id);
   return u && u.pw.salt.slice(0,8) === t.ver ? {role: "user", user: u} : null;
@@ -297,21 +299,27 @@ export default async function handler(req, res){
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   if(req.method === "OPTIONS"){ res.statusCode = 204; return res.end(); }
   try{
-    if(!SECRET) throw httpErr(500, "Storage is not connected yet. In Vercel: Storage → create a Blob store → connect it to this project → Redeploy.");
     const b = req.method === "GET" ? {action: (req.query && req.query.action) || "state"} : await readBody(req);
     const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
 
     if(b.action === "status"){
+      if(!storageReady()) throw httpErr(500, "Storage is not connected yet. In Vercel: Storage → create a Blob store → connect it to this project → Redeploy.");
       const {db} = await readDB();
       return send(res, 200, {hasAdmin: !!db.admin, today: todayKey()});
     }
+    if(b.action === "check"){                       // setup help: names of storage settings only, never values
+      return send(res, 200, {storage: storageReady(), via: BLOB_TOKEN ? "token" : BLOB_STORE ? "store id" : "none",
+        names: Object.keys(process.env).filter(k => /BLOB|VERCEL_OIDC/i.test(k)).sort()});
+    }
+    if(!storageReady()) throw httpErr(500, "Storage is not connected yet. In Vercel: Storage → create a Blob store → connect it to this project → Redeploy.");
     if(b.action === "setup"){                       // first admin, only while none exists
       const {db, out} = await transact(db => {
         if(db.admin) throw httpErr(409, "Admin already exists. Please log in.");
         const {username, pw} = checkUserInput(db, b, "admin", true);
         db.admin = {username, pw: hashPw(pw)};
+        if(!db.secret) db.secret = crypto.randomBytes(32).toString("hex");
       });
-      return send(res, 200, {token: sign("admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
+      return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
     }
     if(b.action === "login"){
       const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0];
@@ -321,13 +329,13 @@ export default async function handler(req, res){
       const u = clean(b.username, 40).toLowerCase(), p = String(b.password || "");
       if(db.admin && db.admin.username.toLowerCase() === u && checkPw(db.admin.pw, p)){
         loginTries.delete(ip);
-        return send(res, 200, {token: sign("admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
+        return send(res, 200, {token: sign(db, "admin", db.admin.pw.salt.slice(0,8)), state: viewFor(db, {role: "admin"})});
       }
       const user = db.users.find(x => x.username.toLowerCase() === u);
       if(user && checkPw(user.pw, p)){
         loginTries.delete(ip);
         if(!scopeLabel(db, user.scope)) throw httpErr(403, "This user's team/department/contractor no longer exists. Ask the admin.");
-        return send(res, 200, {token: sign(user.id, user.pw.salt.slice(0,8)), state: viewFor(db, {role: "user", user})});
+        return send(res, 200, {token: sign(db, user.id, user.pw.salt.slice(0,8)), state: viewFor(db, {role: "user", user})});
       }
       loginTries.set(ip, tries + 1);
       throw httpErr(401, "Wrong User ID or password.");
@@ -347,7 +355,7 @@ export default async function handler(req, res){
       });
       // re-check the login against the saved data (e.g. admin changed their own password → new token)
       const me = whoIs(db, token);
-      const fresh = !me && out.me.role === "admin" ? {token: sign("admin", db.admin.pw.salt.slice(0,8))} : {};
+      const fresh = !me && out.me.role === "admin" ? {token: sign(db, "admin", db.admin.pw.salt.slice(0,8))} : {};
       return send(res, 200, {state: viewFor(db, me || out.me), ...fresh});
     }
     throw httpErr(400, "Unknown request.");
